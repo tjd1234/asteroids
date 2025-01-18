@@ -46,12 +46,14 @@ function randSign() {
 //
 // constants
 //
+
 const BG_COLOR = 0;
 const OUTLINE_COLOR = 255;
 
 const SHIP_DECEL = 0.003;
 const SHIP_ANGLE_RATE = 4;
-const SHIP_MAX_SPEED = 5;
+const SHIP_MAX_SPEED = 1;
+const SHIP_ACCEL = 0.1;
 
 const BULLET_MAX = 5;
 const BULLET_LIFE_MS = 1800;
@@ -98,6 +100,9 @@ const ship = {
   height: 20,
   fillColor: BG_COLOR,
   outlineColor: OUTLINE_COLOR,
+  rotatingLeft: false,
+  rotatingRight: false,
+  accelerating: false,
   dead: false,
   showNose: false,
   showCenter: false,
@@ -470,6 +475,20 @@ function drawShip() {
 }
 
 function updateShip() {
+  if (ship.accelerating) {
+    angleMode(DEGREES);
+    ship.dx += SHIP_ACCEL * sin(ship.angle);
+    ship.dy += -SHIP_ACCEL * cos(ship.angle);
+  }
+
+  // Apply max speed constraint after acceleration
+  const currentSpeed = sqrt(ship.dx * ship.dx + ship.dy * ship.dy);
+  if (currentSpeed > SHIP_MAX_SPEED) {
+    const scale = SHIP_MAX_SPEED / currentSpeed;
+    ship.dx *= scale;
+    ship.dy *= scale;
+  }
+
   // update ship position based on velocity
   ship.x += ship.dx;
   ship.y += ship.dy;
@@ -501,6 +520,13 @@ function updateShip() {
   }
 
   // update angle of ship
+  if (ship.rotatingLeft) {
+    ship.angleRate = -SHIP_ANGLE_RATE;
+  } else if (ship.rotatingRight) {
+    ship.angleRate = SHIP_ANGLE_RATE;
+  } else {
+    ship.angleRate = 0;
+  }
   ship.angle += ship.angleRate;
 
   //
@@ -718,9 +744,6 @@ const userActions = {
 };
 
 function keyPressed() {
-  // key is a pre-defined P5 variable that holds the letter of the key that was
-  // pressed
-
   if (gameState.status === "ready") {
     gameState.status = "playing";
     gameState.score = 0;
@@ -733,12 +756,13 @@ function keyPressed() {
   if (!["playing", "transitioning"].includes(gameState.status)) return;
 
   if (userActions.left.includes(key)) {
-    ship.angleRate = -SHIP_ANGLE_RATE;
+    ship.rotatingLeft = true;
+    ship.rotatingRight = false;
   } else if (userActions.right.includes(key)) {
-    ship.angleRate = SHIP_ANGLE_RATE;
+    ship.rotatingRight = true;
+    ship.rotatingLeft = false;
   } else if (userActions.accelerate.includes(key)) {
-    ship.dx += sin(ship.angle);
-    ship.dy += -cos(ship.angle);
+    ship.accelerating = true;
   } else if (userActions.shoot.includes(key)) {
     if (bullets.length < BULLET_MAX) {
       const bdx = ship.noseX - ship.x;
@@ -756,12 +780,14 @@ function keyPressed() {
   } else if (userActions.invincible.includes(key)) {
     ship.invincible = !ship.invincible;
   }
-
 } // keyPressed
 
 function keyReleased() {
-  // stop turning the ship when a key is released
-  if (ship.angleRate !== 0) {
-    ship.angleRate = 0;
+  if (userActions.left.includes(key)) {
+    ship.rotatingLeft = false;
+  } else if (userActions.right.includes(key)) {
+    ship.rotatingRight = false;
+  } else if (userActions.accelerate.includes(key)) {
+    ship.accelerating = false;
   }
-}
+} // keyReleased

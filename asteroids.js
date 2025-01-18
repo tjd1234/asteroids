@@ -31,6 +31,18 @@ function greenDotAt(x, y) {
   dotAt(x, y, 5, "green");
 }
 
+function makePoint(a, b) {
+  return { x: a, y: b };
+}
+
+function midpoint(a, b) {
+  return makePoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+}
+
+function randSign() {
+  return random(0, 1) < 0.5 ? 1 : -1;
+}
+
 //
 // constants
 //
@@ -87,10 +99,10 @@ const ship = {
   fillColor: BG_COLOR,
   outlineColor: OUTLINE_COLOR,
   dead: false,
-  showNose: true,
-  showCenter: true,
+  showNose: false,
+  showCenter: false,
   invincible: false,
-};
+}; // ship
 
 //
 // bullets
@@ -182,18 +194,6 @@ function addInitialLargeRocks(numRocks) {
 // rock explosion animation
 //
 let rockExplosions = [];
-
-function makePoint(a, b) {
-  return { x: a, y: b };
-}
-
-function midpoint(a, b) {
-  return makePoint((a.x + b.x) / 2, (a.y + b.y) / 2);
-}
-
-function randSign() {
-  return random(0, 1) < 0.5 ? 1 : -1;
-}
 
 function makeSegment(A, B) {
   return {
@@ -561,7 +561,6 @@ function removeBulletAfterDelay(b, delayMS) {
 //
 function drawRocks() {
   push();
-  // fill(BG_COLOR);
   noFill();
 
   rectMode(CENTER);
@@ -758,44 +757,6 @@ function keyPressed() {
     ship.invincible = !ship.invincible;
   }
 
-  // switch (key) {
-  //   case "a":
-  //   case "A": // turn left
-  //     ship.angleRate = -SHIP_ANGLE_RATE;
-  //     break;
-  //   case "d":
-  //   case "D": // turn right
-  //     ship.angleRate = SHIP_ANGLE_RATE;
-  //     break;
-  //   case "w":
-  //   case "W": // accelerate
-  //     ship.dx += sin(ship.angle);
-  //     ship.dy += -cos(ship.angle);
-
-  //     // limit the max speed of the ship
-  //     ship.dx = constrain(ship.dx, -SHIP_MAX_SPEED, SHIP_MAX_SPEED);
-  //     ship.dy = constrain(ship.dy, -SHIP_MAX_SPEED, SHIP_MAX_SPEED);
-  //     break;
-  //   case " ": // shoot a bullet
-  //     if (bullets.length < BULLET_MAX) {
-  //       const bdx = ship.noseX - ship.x;
-  //       const bdy = ship.noseY - ship.y;
-  //       const h = dist(ship.x, ship.y, ship.noseX, ship.noseY);
-  //       const b = makeBullet(
-  //         ship.noseX,
-  //         ship.noseY,
-  //         ship.dx + (bdx / h) * BULLET_SPEED,
-  //         ship.dy + (bdy / h) * BULLET_SPEED
-  //       );
-  //       bullets.push(b);
-  //       removeBulletAfterDelay(b, BULLET_LIFE_MS);
-  //     }
-  //     break;
-  //   case "i":
-  //   case "I": // toggle ship invincibility, for debugging/cheating
-  //     ship.invincible = !ship.invincible;
-  //     break;
-  // } // switch
 } // keyPressed
 
 function keyReleased() {

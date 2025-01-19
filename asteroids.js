@@ -2,16 +2,18 @@
 
 //
 // To do:
-// - add thrusters animation when W pressed
 // - add high score
 // - add lives, i.e. 3 lives at start of game; game over when 0 lives
-// - improve game over screen
+// - add thrusters animation when W pressed
 // - add sounds effects for shooting, explosions, etc.
 // - add jump to hyperspace (random location, random direction)
+// - when W key is pressed, ship should continue to accelerate
+// - when space key is pressed, ship should shoot a bullet (add delay after each
+//   shot to prevent spamming)
+// - improve game over screen
 // - improve rock animation, e.g. make them multiple rotating squares
 // - filter out dead objects in-place instead of using filter()
-// - ship should continue to accelerate when the W key is held down
-// - suse pre-defined bullets
+// - use pre-defined bullets
 //
 
 //
@@ -83,7 +85,7 @@ let gameState = {
   level: 1,
   lives: 3,
   score: 0,
-  status: "ready", // "ready", "playing", "game over", "transitioning"
+  status: "playing", // "playing", "game over", "transitioning"
 };
 
 //
@@ -433,8 +435,6 @@ function draw() {
 
     updateShipExplosions();
     drawShipExplosions();
-  } else if (gameState.status === "ready") {
-    drawReady();
   }
 } // draw
 
@@ -725,14 +725,6 @@ function drawGameOver() {
   pop();
 }
 
-function drawReady() {
-  push();
-  textSize(score.fontSize);
-  fill("red");
-  text("Ready", score.x, score.y);
-  pop();
-}
-
 //
 // keyboard input
 //
@@ -746,10 +738,7 @@ const userActions = {
 };
 
 function keyPressed() {
-  if (gameState.status === "ready") {
-    gameState.status = "playing";
-    gameState.score = 0;
-  } else if (gameState.status === "game over") {
+  if (gameState.status === "game over") {
     if (key === "p" || key === "P") {
       initializeGame();
     }

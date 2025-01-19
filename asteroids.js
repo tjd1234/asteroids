@@ -3,13 +3,15 @@
 //
 // To do:
 // - add thrusters animation when W pressed
-// - make explosion animation more interesting
+// - add high score
+// - add lives, i.e. 3 lives at start of game; game over when 0 lives
+// - improve game over screen
+// - add sounds effects for shooting, explosions, etc.
 // - add jump to hyperspace (random location, random direction)
 // - improve rock animation, e.g. make them multiple rotating squares
 // - filter out dead objects in-place instead of using filter()
 // - ship should continue to accelerate when the W key is held down
-// - since there are a fixed number of bullets, a fixed-sized list can be used,
-//   with a pre-defined set of bullets
+// - suse pre-defined bullets
 //
 
 //
@@ -52,7 +54,7 @@ const OUTLINE_COLOR = 255;
 
 const SHIP_DECEL = 0.003;
 const SHIP_ANGLE_RATE = 4;
-const SHIP_MAX_SPEED = 1;
+const SHIP_MAX_SPEED = 2;
 const SHIP_ACCEL = 0.1;
 
 const BULLET_MAX = 5;
@@ -133,8 +135,8 @@ function makeBullet(x, y, dx, dy) {
 let rocks = [];
 
 const rock_size = {
-  small: 10,
-  medium: 25,
+  small: 15,
+  medium: 30,
   large: 40,
 };
 
@@ -753,6 +755,7 @@ function keyPressed() {
     }
   }
 
+  // only check for user actions if the game is playing or transitioning
   if (!["playing", "transitioning"].includes(gameState.status)) return;
 
   if (userActions.left.includes(key)) {

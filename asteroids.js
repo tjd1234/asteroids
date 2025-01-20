@@ -25,6 +25,14 @@
 //
 
 //
+// According to the game at freeasteroids.org, asteroids:
+// - the ship is an A-shape
+// - asteroids explode into particles
+// - the ship explodes into segments
+// - scores: 20 for a small rock, 50 for a medium rock, 100 for a large rock
+//
+
+//
 // helper functions
 //
 function dotAt(x, y, size, color) {
@@ -69,9 +77,13 @@ const SHIP_ACCEL = 0.1;
 const BULLET_MAX = 5;
 const BULLET_LIFE_MS = 1800;
 const BULLET_SPEED = 3;
-const BULLET_SIZE = 2;
+const BULLET_SIZE = 3;
+
+const ROCK_MIN_SPEED = 0.5;
+const ROCK_MAX_SPEED = 1.5;
 
 const ROCK_MIN_ROTATION = 0.5;
+const ROCK_MAX_ROTATION = 2;
 
 const LEVEL_DELAY_MS = 2000;
 
@@ -80,6 +92,8 @@ const ROCK_EXPLOSION_MIN_RATE = 0.5;
 const ROCK_EXPLOSION_MAX_RATE = 0.75;
 const ROCK_PARTICLE_MIN_SIZE = 1;
 const ROCK_PARTICLE_MAX_SIZE = 1.5;
+const ROCK_PARTICLE_MIN_SPEED = 0.25;
+const ROCK_PARTICLE_MAX_SPEED = 1;
 
 const SHIP_EXPLOSION_DELAY_MS = 10 * 1000;
 const SHIP_PARTICLE_MIN_SIZE = 2;
@@ -150,9 +164,9 @@ const rock_size = {
 };
 
 const rock_score = {
-  small: 100,
-  medium: 200,
-  large: 300,
+  small: 20, // 100,
+  medium: 50, // 200,
+  large: 100, // 300,
 };
 
 function makeRock(x, y, dx, dy, size) {
@@ -162,7 +176,7 @@ function makeRock(x, y, dx, dy, size) {
     dx,
     dy,
     angle: random(0, 360),
-    angleRate: ROCK_MIN_ROTATION + random(-2, 2),
+    angleRate: random(ROCK_MIN_ROTATION, ROCK_MAX_ROTATION) * randSign(),
     size, // short-hand for size: size
     dead: false,
     showOutline: true,
@@ -194,8 +208,10 @@ function randRockY() {
 
 function addRandRock(x, y, rockSize) {
   const angle = random(0, 360) * (Math.PI / 180);
-  const speed = random(0.5, 1.5);
-  rocks.push(makeRock(x, y, speed * Math.cos(angle), speed * Math.sin(angle), rockSize));
+  const speed = random(ROCK_MIN_SPEED, ROCK_MAX_SPEED);
+  rocks.push(
+    makeRock(x, y, speed * Math.cos(angle), speed * Math.sin(angle), rockSize)
+  );
 }
 
 function addInitialLargeRocks(numRocks) {
@@ -225,8 +241,8 @@ function makeParticle(x, y, minSize, maxSize) {
   return {
     x,
     y,
-    dx: random(0.25, 1) * randSign(),
-    dy: random(0.25, 1) * randSign(),
+    dx: random(ROCK_PARTICLE_MIN_SPEED, ROCK_PARTICLE_MAX_SPEED) * randSign(),
+    dy: random(ROCK_PARTICLE_MIN_SPEED, ROCK_PARTICLE_MAX_SPEED) * randSign(),
     size: random(minSize, maxSize),
   };
 }
@@ -282,7 +298,6 @@ function drawRockExplosions() {
   }
   pop();
 }
-
 
 function updateRockExplosions() {
   for (const e of rockExplosions) {

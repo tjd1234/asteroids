@@ -1,15 +1,23 @@
 // asteroids.js
 
 //
+// Bugs to fix:
+// - ...
+//
+// Bugs fixed:
+// - score not displayed during transition
+//
+
+//
 // To do:
 // - add high score
 // - add lives, i.e. 3 lives at start of game; game over when 0 lives
+// - show score numbers when rock is hit
 // - add thrusters animation when W pressed
 // - add sounds effects for shooting, explosions, etc.
 // - add jump to hyperspace (random location, random direction)
 // - when W key is pressed, ship should continue to accelerate
-// - when space key is pressed, ship should shoot a bullet (add delay after each
-//   shot to prevent spamming)
+// - when space key is pressed, ship should shoot a bullet
 // - improve game over screen
 // - improve rock animation, e.g. make them multiple rotating squares
 // - filter out dead objects in-place instead of using filter()
@@ -50,7 +58,6 @@ function randSign() {
 //
 // constants
 //
-
 const BG_COLOR = 0;
 const OUTLINE_COLOR = 255;
 
@@ -188,8 +195,7 @@ function randRockY() {
 function addRandRock(x, y, rockSize) {
   const angle = random(0, 360) * (Math.PI / 180);
   const speed = random(0.5, 1.5);
-  angleMode(RADIANS); // ensure P5's sin and cos use radians
-  rocks.push(makeRock(x, y, speed * cos(angle), speed * sin(angle), rockSize));
+  rocks.push(makeRock(x, y, speed * Math.cos(angle), speed * Math.sin(angle), rockSize));
 }
 
 function addInitialLargeRocks(numRocks) {
@@ -277,16 +283,14 @@ function drawRockExplosions() {
   pop();
 }
 
-function removeRockExplosionAfterDelay(e) {
-  setTimeout(() => {
-    e.dead = true;
-  }, ROCK_EXPLOSION_DELAY_MS);
-}
 
 function updateRockExplosions() {
   for (const e of rockExplosions) {
     e.brightness -= 5;
     e.brightness = constrain(e.brightness, 25, 255);
+    if (e.brightness <= 25) {
+      e.dead = true;
+    }
     for (const seg of e.segments) {
       seg.angle += seg.angleRate;
     }
@@ -435,6 +439,8 @@ function draw() {
 
     updateShipExplosions();
     drawShipExplosions();
+
+    drawScore();
   }
 } // draw
 
@@ -478,9 +484,9 @@ function drawShip() {
 
 function updateShip() {
   if (ship.accelerating) {
-    angleMode(DEGREES);
-    ship.dx += SHIP_ACCEL * sin(ship.angle);
-    ship.dy += -SHIP_ACCEL * cos(ship.angle);
+    const angle = ship.angle * (Math.PI / 180);
+    ship.dx += SHIP_ACCEL * Math.sin(angle);
+    ship.dy += -SHIP_ACCEL * Math.cos(angle);
   }
 
   // Apply max speed constraint after acceleration
@@ -643,9 +649,7 @@ function updateRocks() {
         b.dead = true;
 
         // add explosion
-        const e = makeRockExplosion(r);
-        rockExplosions.push(e);
-        removeRockExplosionAfterDelay(e);
+        rockExplosions.push(makeRockExplosion(r));
 
         // rocks explode into other rocks
         switch (r.size) {

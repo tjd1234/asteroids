@@ -11,7 +11,6 @@
 //
 // To do:
 // - make the ship a Polygon triangle
-// - add high score
 // - improve explosion animations
 //   - e.g. make segments rotate around a random point on them
 //   - e.g. add particles
@@ -66,7 +65,7 @@ const OUTLINE_COLOR = 255;
 
 const SHIP_DECEL = 0.003;
 const SHIP_ANGLE_RATE = 4;
-const SHIP_MAX_SPEED = 2;
+const SHIP_MAX_SPEED = 3;
 const SHIP_ACCEL = 0.1;
 
 const BULLET_MAX = 5;
@@ -74,19 +73,11 @@ const BULLET_LIFE_MS = 1800;
 const BULLET_SPEED = 3;
 const BULLET_SIZE = 3;
 
-const ROCK_MIN_SPEED = 0.5;
-const ROCK_MAX_SPEED = 1.5;
-
-const ROCK_MIN_ROTATION = 0.5;
-const ROCK_MAX_ROTATION = 2;
+const ROCK_MIN_SPEED = 0.25;
+const ROCK_MAX_SPEED = 1;
 
 const LEVEL_DELAY_MS = 2000;
 
-const ROCK_EXPLOSION_DELAY_MS = 1000;
-const ROCK_EXPLOSION_MIN_RATE = 0.5;
-const ROCK_EXPLOSION_MAX_RATE = 0.75;
-const ROCK_PARTICLE_MIN_SIZE = 1;
-const ROCK_PARTICLE_MAX_SIZE = 1.5;
 const PARTICLE_MIN_SPEED = 0.25;
 const PARTICLE_MAX_SPEED = 1;
 
@@ -108,7 +99,7 @@ class Polygon {
     this._angleInDegrees = 0;
     this.angleRateInDegrees = 0;
     this.size = 0;
-    this.filled = true;
+    this.filled = false;
     this.drawCenter = false;
     this.drawCenterSegments = false;
     this.dead = false;
@@ -359,8 +350,8 @@ function makeRandomRock(x, y, size, sides) {
   let shape = new Polygon(makeRandomPolygonPoints(sides, size * 0.5));
   shape.pos = { x: x, y: y };
   shape.vel = {
-    dx: random(0.25, 1.6) * randSign(),
-    dy: random(0.25, 1.6) * randSign(),
+    dx: random(ROCK_MIN_SPEED, ROCK_MAX_SPEED) * randSign(),
+    dy: random(ROCK_MIN_SPEED, ROCK_MAX_SPEED) * randSign(),
   };
   shape.angleInDegrees = 0;
   shape.angleRateInDegrees = randSign() * random(0.3, 1.5);
@@ -953,7 +944,7 @@ function drawScore() {
   // high score
   textSize(score.fontSize);
   fill("yellow");
-  text(`High Score: ${gameState.highScore}`, score.x + 120, score.y);
+  text(`High Score: ${gameState.highScore}`, score.x + 250, score.y);
   pop();
 }
 

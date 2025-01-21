@@ -264,6 +264,7 @@ let gameState = {
   level: 1,
   lives: 3,
   score: 0,
+  highScore: 0,
   status: "playing", // "playing", "game over", "transitioning"
 };
 
@@ -889,21 +890,31 @@ function updateRocks() {
         switch (r.size) {
           case rock_data.small.size: // remove small rock
             gameState.score += rock_data.small.score;
+            gameState.highScore = Math.max(
+              gameState.highScore,
+              gameState.score
+            );
             r.dead = true;
             break;
           case rock_data.medium.size: // split medium rock into two small rocks
             gameState.score += rock_data.medium.score;
+            gameState.highScore = Math.max(
+              gameState.highScore,
+              gameState.score
+            );
             r.dead = true;
             rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
             rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
             break;
-          case rock_data.large.size: // split large rock into two medium rocks with random direction
+          case rock_data.large.size: // split large rock into two medium rocks
             gameState.score += rock_data.large.score;
+            gameState.highScore = Math.max(
+              gameState.highScore,
+              gameState.score
+            );
             r.dead = true;
-            const r1 = makeRandMediumRock(r.pos.x, r.pos.y);
-            const r2 = makeRandMediumRock(r.pos.x, r.pos.y);
-            rocks.push(r1);
-            rocks.push(r2);
+            rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
+            rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
             break;
         } // switch
       } // if hitRock
@@ -935,9 +946,14 @@ function updateRocks() {
 //
 function drawScore() {
   push();
+  // current score
   textSize(score.fontSize);
   fill("green");
   text(gameState.score.toString(), score.x, score.y);
+  // high score
+  textSize(score.fontSize);
+  fill("yellow");
+  text(`High Score: ${gameState.highScore}`, score.x + 120, score.y);
   pop();
 }
 

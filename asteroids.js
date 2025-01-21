@@ -54,21 +54,8 @@ function greenDotAt(x, y) {
   dotAt(x, y, 5, "green");
 }
 
-// function makePoint(a, b) {
-//   return { x: a, y: b };
-// }
-
-// function midpoint(a, b) {
-//   return makePoint((a.x + b.x) / 2, (a.y + b.y) / 2);
-// }
-
 function randSign() {
   return random(0, 1) < 0.5 ? 1 : -1;
-}
-
-function getRandObjValue(obj) {
-  const values = Object.values(obj);
-  return values[Math.floor(Math.random() * values.length)];
 }
 
 //
@@ -346,22 +333,6 @@ const rock_data = {
   },
 }; // rock_data
 
-// function makeRock(x, y, dx, dy, size) {
-//   const rock = {
-//     x, // short-hand for x: x, y: y, dx: dx, dy: dy
-//     y,
-//     dx,
-//     dy,
-//     angle: random(0, 360),
-//     angleRate: random(ROCK_MIN_ROTATION, ROCK_MAX_ROTATION) * randSign(),
-//     size, // short-hand for size: size
-//     dead: false,
-//     showOutline: true,
-//     showHitCircle: false,
-//   };
-//   return rock;
-// }
-
 // Generate n random points for a polygon within a given radius
 function makeRandomPolygonPoints(n, maxRadius = 100) {
   const points = [];
@@ -384,7 +355,6 @@ function makeRandomPolygonPoints(n, maxRadius = 100) {
 }
 
 function makeRandomRock(x, y, size, sides) {
-  // console.log('makeRandomRock input:', { x, y, size });
   let shape = new Polygon(makeRandomPolygonPoints(sides, size * 0.5));
   shape.pos = { x: x, y: y };
   shape.vel = {
@@ -394,7 +364,6 @@ function makeRandomRock(x, y, size, sides) {
   shape.angleInDegrees = 0;
   shape.angleRateInDegrees = randSign() * random(0.3, 1.5);
   shape.size = size;
-  // console.log("makeRandomRock shape:", shape);
   return shape;
 }
 
@@ -409,19 +378,6 @@ function makeRandMediumRock(x, y) {
 function makeRandLargeRock(x, y) {
   return makeRandomRock(x, y, rock_data.large.size, rock_data.large.sides);
 }
-
-// function addRandRock(x, y, rockSize) {
-//   const angle = random(0, 360) * (Math.PI / 180);
-//   const speed = random(ROCK_MIN_SPEED, ROCK_MAX_SPEED);
-//   rocks.push(
-//     makeRock(x, y, speed * Math.cos(angle), speed * Math.sin(angle), rockSize)
-//   );
-// }
-
-// function hitRock(rock, x, y) {
-//   const d = dist(rock.x, rock.y, x, y);
-//   return d <= rock.size / 2;
-// }
 
 function randRockPoint(span) {
   if (random(0, 1) < 0.5) {
@@ -438,13 +394,6 @@ function randRockX() {
 function randRockY() {
   return randRockPoint(height);
 }
-
-// function addInitialLargeRocks(numRocks) {
-//   rocks = [];
-//   for (let i = 0; i < numRocks; i++) {
-//     addRandRock(randRockX(), randRockY(), rock_size.large);
-//   } // for
-// }
 
 function addInitialLargeRocks(numRocks) {
   rocks = [];
@@ -504,7 +453,7 @@ class RockExplosion {
       const dirX = midpoint.x; // since rock points are already relative to center
       const dirY = midpoint.y;
 
-      // Normalize the direction vector and scale it
+      // normalize the direction vector and scale it
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
 
       this.segments.push({
@@ -527,7 +476,7 @@ class RockExplosion {
   }
 
   update() {
-    this.alpha -= 2; // Fade out
+    this.alpha -= 2; // fade out
     for (const seg of this.segments) {
       // update position
       seg.pos.x += seg.vel.dx;
@@ -536,7 +485,7 @@ class RockExplosion {
       // add orbital rotation around original center
       const dx = seg.pos.x - this.center.x;
       const dy = seg.pos.y - this.center.y;
-      const angle = (this.orbitalSpeed * Math.PI) / 180; // Convert to radians
+      const angle = (this.orbitalSpeed * Math.PI) / 180; // convert to radians
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
 
@@ -558,7 +507,7 @@ class RockExplosion {
         seg.pos.y = 0;
       }
 
-      // Update rotation
+      // update rotation
       seg.angle += seg.angleRate;
     }
     if (this.alpha <= 0) {
@@ -591,58 +540,6 @@ function makeParticle(x, y, minSize, maxSize) {
   };
 }
 
-// function makeRockExplosion(rock) {
-//   const { x, y, size } = rock;
-//   const s = size / 2;
-//   const A = makePoint(x + s, y + s);
-//   const B = makePoint(x + s, y - s);
-//   const C = makePoint(x - s, y - s);
-//   const D = makePoint(x - s, y + s);
-//   const AB = makeSegment(A, B);
-//   const BC = makeSegment(B, C);
-//   const CD = makeSegment(C, D);
-//   const DA = makeSegment(D, A);
-
-//   const explosion = {
-//     segments: [AB, BC, CD, DA],
-//     brightness: 255,
-//     particles: [
-//       makeParticle(x, y, ROCK_PARTICLE_MIN_SIZE, ROCK_PARTICLE_MAX_SIZE),
-//       makeParticle(x, y, ROCK_PARTICLE_MIN_SIZE, ROCK_PARTICLE_MAX_SIZE),
-//       makeParticle(x, y, ROCK_PARTICLE_MIN_SIZE, ROCK_PARTICLE_MAX_SIZE),
-//       makeParticle(x, y, ROCK_PARTICLE_MIN_SIZE, ROCK_PARTICLE_MAX_SIZE),
-//     ],
-//     dead: false,
-//   };
-//   return explosion;
-// }
-
-// function drawRockExplosions() {
-//   push();
-//   for (const e of rockExplosions) {
-//     stroke(e.brightness);
-//     for (const seg of e.segments) {
-//       // draw segments
-//       push();
-//       translate(seg.mid.x, seg.mid.y);
-//       rotate(seg.angle);
-//       line(
-//         seg.start.x - seg.mid.x,
-//         seg.start.y - seg.mid.y,
-//         seg.end.x - seg.mid.x,
-//         seg.end.y - seg.mid.y
-//       );
-//       pop();
-//     }
-//     // draw particles
-//     for (const p of e.particles) {
-//       fill(e.brightness);
-//       rect(p.x, p.y, p.size, p.size);
-//     }
-//   }
-//   pop();
-// }
-
 function drawRockExplosions() {
   for (const e of rockExplosions) {
     e.draw();
@@ -655,25 +552,6 @@ function updateRockExplosions() {
   }
   rockExplosions = rockExplosions.filter((e) => !e.dead);
 }
-
-// function updateRockExplosions() {
-//   for (const e of rockExplosions) {
-//     e.brightness -= 5;
-//     e.brightness = constrain(e.brightness, 25, 255);
-//     if (e.brightness <= 25) {
-//       e.dead = true;
-//     }
-//     for (const seg of e.segments) {
-//       seg.angle += seg.angleRate;
-//     }
-//     for (const p of e.particles) {
-//       p.x += p.dx;
-//       p.y += p.dy;
-//     }
-//   }
-//   // remove dead explosions
-//   rockExplosions = rockExplosions.filter((e) => !e.dead);
-// }
 
 //
 // ship explosion animation
@@ -732,8 +610,6 @@ const score = {
   color: 255,
 };
 
-//
-// initialize the game
 //
 // initialize the game
 //
@@ -963,33 +839,6 @@ function removeBulletAfterDelay(b, delayMS) {
   }, delayMS);
 }
 
-//
-// rock functions
-//
-// function drawRocks() {
-//   push();
-//   noFill();
-
-//   rectMode(CENTER);
-//   for (const r of rocks) {
-//     stroke(OUTLINE_COLOR);
-//     push();
-//     translate(r.x, r.y);
-//     angleMode(DEGREES);
-//     rotate(r.angle);
-//     if (r.showOutline) {
-//       rect(0, 0, r.size, r.size);
-//     }
-//     if (r.showHitCircle) {
-//       stroke(0, 255, 0);
-//       ellipse(0, 0, r.size, r.size);
-//     }
-//     pop();
-//   } // for
-
-//   pop();
-// } // drawRocks
-
 function drawRocks() {
   push();
 
@@ -1028,7 +877,6 @@ function updateRocks() {
     // check if a bullet hit the rock
     let hit = false;
     for (const b of bullets) {
-      // if (hitRock(r, b.x, b.y)) {
       if (r.containsPoint(b.x, b.y)) {
         hit = true;
         b.dead = true;
@@ -1038,15 +886,12 @@ function updateRocks() {
         rockExplosions.push(e);
 
         // rocks explode into other rocks
-        // console.log("hit rock", r);
         switch (r.size) {
           case rock_data.small.size: // remove small rock
-            // console.log("hit small rock", r);
             gameState.score += rock_data.small.score;
             r.dead = true;
             break;
           case rock_data.medium.size: // split medium rock into two small rocks
-            // console.log("hit medium rock", r);
             gameState.score += rock_data.medium.score;
             r.dead = true;
             rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
@@ -1055,11 +900,8 @@ function updateRocks() {
           case rock_data.large.size: // split large rock into two medium rocks with random direction
             gameState.score += rock_data.large.score;
             r.dead = true;
-            // console.log("hit large rock", r);
             const r1 = makeRandMediumRock(r.pos.x, r.pos.y);
-            // console.log("r1", r1);
             const r2 = makeRandMediumRock(r.pos.x, r.pos.y);
-            // console.log("r2", r2);
             rocks.push(r1);
             rocks.push(r2);
             break;
@@ -1111,7 +953,6 @@ function drawGameOver() {
 //
 // keyboard input
 //
-
 const userActions = {
   left: ["a", "A"],
   right: ["d", "D"],

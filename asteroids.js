@@ -311,7 +311,7 @@ const rock_data = {
   small: {
     size: 20,
     sides: 6,
-    score: 20,
+    score: 100,
   },
   medium: {
     size: 40,
@@ -321,7 +321,7 @@ const rock_data = {
   large: {
     size: 60,
     sides: 10,
-    score: 100,
+    score: 20,
   },
 }; // rock_data
 
@@ -420,7 +420,7 @@ class RockExplosion {
 
     // store the rock's center for orbital rotation
     this.center = { ...rock.pos };
-    this.orbitalSpeed = -random(0.25, 0.5);
+    this.orbitalSpeed = -random(0.5, 1.0)// -random(0.25, 0.5);
 
     // Create segments and give each one its own position, velocity and rotation
     for (let i = 0; i < n; i++) {

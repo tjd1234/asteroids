@@ -2,17 +2,31 @@
 
 //
 // Bugs to fix:
+// - Sometimes when respawning the ship instantly explodes in the center of the
+//   screen, even though there are no rocks nearby.
 // - Sometimes explosions are clearly wrong, i.e. it whips around in a way that
 //   does not match other explosions. Maybe a calculation error in explosion
 //   code?
 //
 // Bugs fixed:
-// - Appears to be fixed by only going to next level when game state is
+// - Fixed by adding extra ship in score if needed. A bit of a hack, but it
+//   seems to work. Don't remove scoreboard ship until it is placed on the
+//   screen. Otherwise, while waiting for respawn it looks like nothing is
+//   happening.
+// - Fixed by setting left, right, and acceleration flags to false when
+//   re-initializing. Sometimes after respawning the shift left, right, and
+//   thrusters are not working. Shooting works, but sometimes at a weird angle.
+// - Fixed by adding "explosion" state to guarantee some time before new ship is
+//   respawned. Seems to have fixed double explosion problem. Sometimes a ship
+//   explosion occurs twice: once where it hits a rock (where it should be), and
+//   then, sometimes, a second explosion occurs in the center of the screen. I
+//   think it has to do with an error in the logic of the state transitions.
+// - Fixed, apparently, by only going to next level when game state is
 //   "playing", but tricky to test since it is hard to trigger. It's possible to
 //   trigger the ship explosion without losing a ship. Seems to happen when near
 //   level transition, e.g. maybe ship hits rock, but then maybe level
 //   transition is set before game over occurs?
-// - score not displayed during transition
+// - Fixed by displaying score during transition.
 //
 
 //
@@ -80,8 +94,12 @@ const SHIP_ANGLE_RATE = 4;
 const SHIP_MAX_SPEED = 3;
 const SHIP_ACCEL = 0.1;
 
+const EXPLOSION_DELAY_MS = 2 * 1000;
+
 // get a new ship every EXTRA_SHIP_SCORE points
 const EXTRA_SHIP_SCORE_INCREMENT = 10000;
+
+const START_LIVES = 3;
 
 const RESPAWN_RADIUS = 100;
 const RESPAWN_SHOW = false;
@@ -99,7 +117,7 @@ const LEVEL_DELAY_MS = 2000;
 const PARTICLE_MIN_SPEED = 0.25;
 const PARTICLE_MAX_SPEED = 1;
 
-const SHIP_EXPLOSION_DELAY_MS = 10 * 1000;
+const SHIP_EXPLOSION_DELAY_MS = 5 * 1000;
 const SHIP_PARTICLE_MIN_SIZE = 2;
 const SHIP_PARTICLE_MAX_SIZE = 4;
 
@@ -143,11 +161,11 @@ class Polygon {
 
     // Rotate each point around the center
     for (const point of this.points) {
-      // Translate point to origin
+      // translate point to origin
       const dx = point.x - center.x;
       const dy = point.y - center.y;
 
-      // Rotate point
+      // rotate point
       const cos = Math.cos(angleInRadians);
       const sin = Math.sin(angleInRadians);
       point.x = center.x + (dx * cos - dy * sin);
@@ -271,14 +289,22 @@ class Polygon {
 //
 // game state
 //
-let gameState = {
+const state = {
+  playing: "playing",
+  gameOver: "game over",
+  transitioning: "transitioning", // between levels
+  exploding: "exploding", // ship is exploding
+  respawning: "respawning", // in this state waiting for clear space to respawn ship
+};
+
+let game = {
   score: 0,
   level: 1,
-  lives: 3,
+  lives: START_LIVES,
   nextExtraShipScore: EXTRA_SHIP_SCORE_INCREMENT,
   highScore: 0,
-  status: "playing", // "playing", "game over", "transitioning", "respawning"
-  showStatus: false,
+  status: state.playing,
+  showStatus: false, // for debugging
 };
 
 //
@@ -570,7 +596,7 @@ function updateRockExplosions() {
 //
 // ship explosion animation
 //
-let shipExplosions = [];
+let shipExplosion = null;
 
 function makeShipExplosion(ship) {
   const particles = Array(20)
@@ -588,31 +614,40 @@ function makeShipExplosion(ship) {
 
 function removeShipExplosionAfterDelay(e) {
   setTimeout(() => {
-    e.dead = true;
+    shipExplosion = null;
   }, SHIP_EXPLOSION_DELAY_MS);
 }
 
-function drawShipExplosions() {
+function drawShipExplosion() {
+  if (shipExplosion === null) return;
   push();
-  for (const e of shipExplosions) {
-    for (const p of e) {
-      fill(255, 0, 0);
-      rect(p.x, p.y, p.size, p.size);
-    }
+  for (const p of shipExplosion) {
+    fill(255, 0, 0);
+    rect(p.x, p.y, p.size, p.size);
   }
   pop();
 }
 
-function updateShipExplosions() {
-  for (const e of shipExplosions) {
-    for (const p of e) {
-      p.x += p.dx;
-      p.y += p.dy;
+function updateShipExplosion() {
+  if (shipExplosion === null) return;
+  for (const p of shipExplosion) {
+    p.x += p.dx;
+    p.y += p.dy;
+    // wrap around the screen
+    if (p.x < 0) {
+      p.x = width - 1;
     }
-  }
-  // remove dead explosions
-  shipExplosions = shipExplosions.filter((e) => !e.dead);
-}
+    if (p.x >= width) {
+      p.x = 0;
+    }
+    if (p.y < 0) {
+      p.y = height - 1;
+    }
+    if (p.y >= height) {
+      p.y = 0;
+    }
+  } // for
+} // updateShipExplosion
 
 //
 // score
@@ -628,13 +663,13 @@ const score = {
 // initialize the game
 //
 function initializeGame() {
-  gameState.status = "playing";
-  gameState.score = 0;
-  gameState.lives = 3;
-  gameState.level = 1;
-  gameState.nextExtraShipScore = EXTRA_SHIP_SCORE_INCREMENT;
+  game.status = state.playing;
+  game.score = 0;
+  game.lives = START_LIVES;
+  game.level = 1;
+  game.nextExtraShipScore = EXTRA_SHIP_SCORE_INCREMENT;
   bullets = [];
-  shipExplosions = [];
+  shipExplosion = null;
   rockExplosions = [];
   rocks = [];
   addInitialLargeRocks(3);
@@ -644,6 +679,11 @@ function initializeGame() {
   ship.dy = 0;
   ship.angle = 0;
   ship.angleRate = 0;
+  ship.rotatingLeft = false;
+  ship.rotatingRight = false;
+  ship.accelerating = false;
+  ship.dead = false;
+  ship.invincible = false;
 }
 
 //
@@ -659,7 +699,6 @@ function setup() {
 function draw() {
   background(0);
 
-  
   push();
   // draw respawn circle
   noFill();
@@ -682,12 +721,12 @@ function draw() {
       line(PLAYFIELD_CENTER.x, PLAYFIELD_CENTER.y, worldX, worldY);
     }
   } // for
-  if (rockInRespawnCircle) {
-    stroke(255, 0, 0);
-  } else {
-    stroke(0, 255, 0);
-  }
   if (RESPAWN_SHOW) {
+    if (rockInRespawnCircle) {
+      stroke(255, 0, 0);
+    } else {
+      stroke(0, 255, 0);
+    }
     ellipse(
       PLAYFIELD_CENTER.x,
       PLAYFIELD_CENTER.y,
@@ -697,7 +736,7 @@ function draw() {
   }
   pop();
 
-  if (gameState.status === "playing") {
+  if (game.status === state.playing) {
     updateShip();
     drawShip();
 
@@ -710,11 +749,11 @@ function draw() {
     updateRockExplosions();
     drawRockExplosions();
 
-    updateShipExplosions();
-    drawShipExplosions();
+    updateShipExplosion();
+    drawShipExplosion();
 
     drawScore();
-  } else if (gameState.status === "game over") {
+  } else if (game.status === state.gameOver) {
     updateBullets();
     drawBullets();
 
@@ -724,12 +763,12 @@ function draw() {
     updateRockExplosions();
     drawRockExplosions();
 
-    updateShipExplosions();
-    drawShipExplosions();
+    updateShipExplosion();
+    drawShipExplosion();
 
     drawScore();
     drawGameOver();
-  } else if (gameState.status === "transitioning") {
+  } else if (game.status === state.transitioning) {
     updateShip();
     drawShip();
 
@@ -739,14 +778,30 @@ function draw() {
     updateRockExplosions();
     drawRockExplosions();
 
-    updateShipExplosions();
-    drawShipExplosions();
+    updateShipExplosion();
+    drawShipExplosion();
 
     drawScore();
-  } else if (gameState.status === "respawning") {
+  } else if (game.status === state.exploding) {
+    updateBullets();
+    drawBullets();
+
+    updateRocks();
+    drawRocks();
+
+    updateRockExplosions();
+    drawRockExplosions();
+
+    updateShipExplosion();
+    drawShipExplosion();
+
+    drawScore();
+  } else if (game.status === state.respawning) {
     if (!rockInRespawnCircle) {
       console.log("respawning");
-      gameState.status = "playing";
+
+      game.status = state.playing;
+      ship.dead = false;
       ship.x = width / 2;
       ship.y = height / 2;
       ship.dx = 0;
@@ -763,30 +818,12 @@ function draw() {
     updateRockExplosions();
     drawRockExplosions();
 
-    updateShipExplosions();
-    drawShipExplosions();
+    updateShipExplosion();
+    drawShipExplosion();
 
     drawScore();
-
   }
 } // draw
-
-// function respawnCircleClear() {
-//   // if there are no rocks in/intersecting the respawn circle, respawn the ship
-//   for (const r of rocks) {
-//     const center = r.getCenter();
-//     // Add the rock's position to get world coordinates
-//     const worldX = center.x + r.pos.x;
-//     const worldY = center.y + r.pos.y;
-//     const distance = dist(worldX, worldY, PLAYFIELD_CENTER.x, PLAYFIELD_CENTER.y);
-//     const threshold = RESPAWN_RADIUS + r.size / 2;
-
-//     if (distance < threshold) {
-//       return false;
-//     }
-//   }
-//   return true;
-// }
 
 function drawShipBody() {
   // draw the ship: triangle(nose, left wing, right wing)
@@ -826,9 +863,10 @@ function drawShip() {
   if (ship.showCenter) {
     greenDotAt(ship.x, ship.y);
   }
-}
+} // drawShip
 
 function updateShip() {
+  if (ship.dead) return;
   if (ship.accelerating) {
     const angle = ship.angle * (Math.PI / 180);
     ship.dx += SHIP_ACCEL * Math.sin(angle);
@@ -948,37 +986,27 @@ function drawRocks() {
 } // drawRocks
 
 function updateRocks() {
-  // to use P5's sin and cos need to use radians
   for (const r of rocks) {
     // check if the ship hit the rock
     if (
-      r.containsPoint(ship.x, ship.y) &&
+      (r.containsPoint(ship.x, ship.y) ||
+        r.containsPoint(ship.noseX, ship.noseY)) &&
       !ship.invincible &&
-      gameState.status === "playing"
+      game.status === state.playing
     ) {
-      if (gameState.lives > 0) {
-        gameState.status = "respawning";
-        gameState.lives--;
+      if (game.lives > 1) {
+        game.lives--;
+        game.status = state.exploding;
+        setTimeout(() => {
+          game.status = state.respawning;
+        }, EXPLOSION_DELAY_MS);
       } else {
-        gameState.status = "game over";
+        game.status = state.gameOver;
       }
       const e = makeShipExplosion(ship);
-      shipExplosions.push(e);
+      shipExplosion = e;
       removeShipExplosionAfterDelay(e);
-    } else if (
-      r.containsPoint(ship.noseX, ship.noseY) &&
-      !ship.invincible &&
-      gameState.status === "playing"
-    ) {
-      if (gameState.lives > 0) {
-        gameState.status = "respawning";
-        gameState.lives--;
-      } else {
-        gameState.status = "game over";
-      }
-      const e = makeShipExplosion(ship);
-      shipExplosions.push(e);
-      removeShipExplosionAfterDelay(e);
+      ship.dead = true;
     }
 
     // check if a bullet hit the rock
@@ -995,29 +1023,20 @@ function updateRocks() {
         // rocks explode into other rocks
         switch (r.size) {
           case rock_data.small.size: // remove small rock
-            gameState.score += rock_data.small.score;
-            gameState.highScore = Math.max(
-              gameState.highScore,
-              gameState.score
-            );
+            game.score += rock_data.small.score;
+            game.highScore = Math.max(game.highScore, game.score);
             r.dead = true;
             break;
           case rock_data.medium.size: // split medium rock into two small rocks
-            gameState.score += rock_data.medium.score;
-            gameState.highScore = Math.max(
-              gameState.highScore,
-              gameState.score
-            );
+            game.score += rock_data.medium.score;
+            game.highScore = Math.max(game.highScore, game.score);
             r.dead = true;
             rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
             rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
             break;
           case rock_data.large.size: // split large rock into two medium rocks
-            gameState.score += rock_data.large.score;
-            gameState.highScore = Math.max(
-              gameState.highScore,
-              gameState.score
-            );
+            game.score += rock_data.large.score;
+            game.highScore = Math.max(game.highScore, game.score);
             r.dead = true;
             rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
             rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
@@ -1026,15 +1045,7 @@ function updateRocks() {
       } // if hitRock
     } // for bullets
 
-    // check if we need to add a new ship
-    if (gameState.score >= gameState.nextExtraShipScore) {
-      gameState.lives++;
-      gameState.nextExtraShipScore += EXTRA_SHIP_SCORE_INCREMENT;
-    }
-    // allow at most 10 ships
-    gameState.lives = Math.min(gameState.lives, 10);
-
-    // if hit a rock, skip to next rock
+    // if rock is hit, skip to next rock without updating it (it's dead)
     if (hit) continue;
 
     // move the rock
@@ -1044,13 +1055,23 @@ function updateRocks() {
   // remove dead rocks
   rocks = rocks.filter((r) => !r.dead);
 
+  // check if we need to add a new ship
+  if (game.score >= game.nextExtraShipScore) {
+    game.lives++;
+    game.nextExtraShipScore += EXTRA_SHIP_SCORE_INCREMENT;
+  }
+  // allow at most 10 ships
+  if (game.lives > 10) {
+    game.lives = 10;
+  }
+
   // go to the next level if all rocks are dead
-  if (rocks.length === 0 && gameState.status === "playing") {
-    gameState.status = "transitioning";
+  if (rocks.length === 0 && game.status === state.playing) {
+    game.status = state.transitioning;
     setTimeout(() => {
-      gameState.level++;
-      addInitialLargeRocks(Math.min(5, 2 + gameState.level));
-      gameState.status = "playing";
+      game.level++;
+      addInitialLargeRocks(Math.min(5, 2 + game.level));
+      game.status = state.playing;
     }, LEVEL_DELAY_MS);
   }
 } // updateRocks
@@ -1063,7 +1084,7 @@ function drawScore() {
   // current score
   textSize(score.fontSize);
   fill("green");
-  text(gameState.score.toString(), score.x, score.y);
+  text(game.score.toString(), score.x, score.y);
 
   // show remaining ships (not including the one currently playing/respawning)
   push();
@@ -1071,7 +1092,14 @@ function drawScore() {
   noFill();
   stroke(255);
   let x = 90;
-  for (let i = 0; i < gameState.lives - 1; i++) {
+
+  // After a ship explodes, we show one extra ship in reserve so that the player
+  // can see that the ship is respawning.
+  let extra = 0;
+  if (game.status === state.respawning || game.status === state.exploding) {
+    extra = 1;
+  } 
+  for (let i = 0; i < game.lives - 1 + extra; i++) { // # of ships in reserve
     push();
     translate(x, score.y - 6);
     drawShipBody();
@@ -1083,14 +1111,14 @@ function drawScore() {
   // high score
   textSize(score.fontSize);
   fill("yellow");
-  text(`High Score: ${gameState.highScore}`, score.x + 250, score.y);
+  text(`High Score: ${game.highScore}`, score.x + 250, score.y);
   pop();
 
   // show current game state
-  if (gameState.showStatus) {
+  if (game.showStatus) {
     textSize(score.fontSize);
     fill("white");
-    text(`Status: ${gameState.status}`, score.x + 100, score.y);
+    text(`Status: ${game.status}`, score.x + 100, score.y);
   }
 }
 
@@ -1098,7 +1126,7 @@ function drawGameOver() {
   push();
   textSize(score.fontSize);
   fill("red");
-  text(`Game Over: ${gameState.score}`, width / 2 - 75, height / 2);
+  text(`Game Over: ${game.score}`, width / 2 - 75, height / 2);
   text("Press P to play again", width / 2 - 100, height / 2 + 20);
   pop();
 }
@@ -1115,14 +1143,14 @@ const userActions = {
 };
 
 function keyPressed() {
-  if (gameState.status === "game over") {
+  if (game.status === state.gameOver) {
     if (key === "p" || key === "P") {
       initializeGame();
     }
   }
 
   // only check for user actions if the game is playing or transitioning
-  if (!["playing", "transitioning"].includes(gameState.status)) return;
+  if (![state.playing, state.transitioning].includes(game.status)) return;
 
   if (userActions.left.includes(key)) {
     ship.rotatingLeft = true;

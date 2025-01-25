@@ -33,7 +33,7 @@
 
 //
 // To do:
-// - make the ship a Polygon triangle
+// - add explosion constants to SHIP
 // - add line and fill color to Polygon (so multi-colored rocks are possible!)
 // - improve explosion animations
 //   - e.g. make segments rotate around a random point on them
@@ -60,29 +60,29 @@
 // helper code
 //
 function dotAt(x, y, size, color) {
-  push();
-  fill(color);
-  noStroke();
-  ellipse(x, y, size, size);
-  pop();
+    push();
+    fill(color);
+    noStroke();
+    ellipse(x, y, size, size);
+    pop();
 }
 
 function redDotAt(x, y) {
-  dotAt(x, y, 5, "red");
+    dotAt(x, y, 5, "red");
 }
 
 function greenDotAt(x, y) {
-  dotAt(x, y, 5, "green");
+    dotAt(x, y, 5, "green");
 }
 
 function randSign() {
-  return random(0, 1) < 0.5 ? 1 : -1;
+    return random(0, 1) < 0.5 ? 1 : -1;
 }
 
 function wrapCoordinate(value, max) {
-  if (value < 0) return max - 1;
-  if (value >= max) return 0;
-  return value;
+    if (value < 0) return max - 1;
+    if (value >= max) return 0;
+    return value;
 }
 
 //
@@ -90,38 +90,47 @@ function wrapCoordinate(value, max) {
 //
 
 const PLAYFIELD = {
-  width: 400,
-  height: 400,
-  center: { x: 200, y: 200 },
+    width: 400,
+    height: 400,
+    center: { x: 200, y: 200 },
 };
 
 const COLOR = {
-  bg: 0,
-  outline: 255,
+    bg: 0,
+    outline: 255,
 };
 
+const SHIP_WIDTH = 14;
+const SHIP_HEIGHT = 20;
+const SHIP_BODY = [
+    { x: 0, y: -SHIP_HEIGHT / 2 },
+    { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
+    { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
+];
+
 const SHIP = {
-  width: 14,
-  height: 20,
-  decel: 0.003,
-  angleRate: 4,
-  maxSpeed: 3,
-  accel: 0.1,
-  startLives: 3,
-  maxLives: 10 + 1,
-  extraShipScoreIncrement: 10000,
-  explosionDelayMS: 5 * 1000,
-  respawn: {
-    radius: 100,
-    show: false,
-  },
-  particle: {
-    // explosion particles
-    minSpeed: 0.25,
-    maxSpeed: 1,
-    minSize: 2,
-    maxSize: 4,
-  },
+    width: SHIP_WIDTH,
+    height: SHIP_HEIGHT,
+    body: SHIP_BODY,
+    decel: 0.003,
+    angleRate: 4,
+    maxSpeed: 3,
+    accel: 0.1,
+    startLives: 3,
+    maxLives: 10 + 1,
+    extraShipScoreIncrement: 10000,
+    explosionDelayMS: 5 * 1000,
+    respawn: {
+        radius: 100,
+        show: false,
+    },
+    particle: {
+        // explosion particles
+        minSpeed: 0.25,
+        maxSpeed: 1,
+        minSize: 2,
+        maxSize: 4,
+    },
 };
 
 // after ship explodes, wait this long before respawning
@@ -129,231 +138,228 @@ const DELAY_TO_RESPAWN = 2 * 1000;
 const LEVEL_DELAY_MS = 2000;
 
 const BULLET = {
-  max: 5,
-  lifeMS: 1800,
-  speed: 3,
-  size: 3,
+    max: 5,
+    lifeMS: 1800,
+    speed: 3,
+    size: 3,
 };
 
 const ROCK = {
-  speed: {
-    min: 0.25,
-    max: 1,
-  },
-  small: {
-    size: 20,
-    sides: 6,
-    score: 100,
-  },
-  medium: {
-    size: 40,
-    sides: 8,
-    score: 50,
-  },
-  large: {
-    size: 60,
-    sides: 10,
-    score: 20,
-  },
+    speed: {
+        min: 0.25,
+        max: 1,
+    },
+    small: {
+        size: 20,
+        sides: 6,
+        score: 100,
+    },
+    medium: {
+        size: 40,
+        sides: 8,
+        score: 50,
+    },
+    large: {
+        size: 60,
+        sides: 10,
+        score: 20,
+    },
 }; // ROCK
 
 //
 // Polygon class for rocks and ship
 //
 class Polygon {
-  constructor(points) {
-    // points should be an array of {x: number, y: number} objects
-    this.points = points;
+    constructor(points) {
+        // points should be an array of {x: number, y: number} objects
+        this.points = points;
 
-    this.pos = { x: 0, y: 0 };
+        this.pos = { x: 0, y: 0 };
 
-    this.vel = { dx: 0, dy: 0 };
-    this._angleInDegrees = 0;
-    this.angleRateInDegrees = 0;
-    this.size = 0;
-    this.filled = false;
-    this.drawCenter = false;
-    this.drawCenterSegments = false;
-    this.dead = false;
-  }
-
-  // Calculate the center point of the polygon
-  getCenter() {
-    let sumX = 0;
-    let sumY = 0;
-    for (const p of this.points) {
-      sumX += p.x;
-      sumY += p.y;
+        this.vel = { dx: 0, dy: 0 };
+        this._angleInDegrees = 0;
+        this.angleRateInDegrees = 0;
+        this.size = 0;
+        this.filled = false;
+        this.showCenter = false;
+        this.showCenterSegments = false;
+        this.dead = false;
     }
-    return {
-      x: sumX / this.points.length,
-      y: sumY / this.points.length,
-    };
-  }
 
-  // Rotate the polygon around its center by the given angle (in radians)
-  rotate(angleInRadians) {
-    const center = this.getCenter();
-
-    // Rotate each point around the center
-    for (const point of this.points) {
-      // translate point to origin
-      const dx = point.x - center.x;
-      const dy = point.y - center.y;
-
-      // rotate point
-      const cos = Math.cos(angleInRadians);
-      const sin = Math.sin(angleInRadians);
-      point.x = center.x + (dx * cos - dy * sin);
-      point.y = center.y + (dx * sin + dy * cos);
-    }
-  }
-
-  rotateDegrees(degrees) {
-    this.rotate(degrees * (Math.PI / 180));
-  }
-
-  set angleInDegrees(d) {
-    this._angleInDegrees = d;
-    this.rotateDegrees(d);
-  }
-
-  get angleInDegrees() {
-    return this._angleInDegrees;
-  }
-
-  update() {
-    this.pos.x += this.vel.dx;
-    this.pos.y += this.vel.dy;
-
-    // wrap around the screen
-    this.pos.x = wrapCoordinate(this.pos.x, width);
-    this.pos.y = wrapCoordinate(this.pos.y, height);
-
-    this.rotateDegrees(this.angleRateInDegrees);
-  }
-
-  draw() {
-    push();
-    if (this.filled) {
-      fill(255);
-      noStroke();
-    } else {
-      stroke(255);
-      noFill();
-    }
-    translate(this.pos.x, this.pos.y);
-    rotate(this.angle);
-
-    // draw the polygon
-    beginShape();
-    for (const p of this.points) {
-      vertex(p.x, p.y);
-    }
-    endShape(CLOSE);
-
-    const center = this.getCenter();
-    if (this.drawCenterSegments) {
-      push();
-      stroke(255);
-      for (const p of this.points) {
-        line(center.x, center.y, p.x, p.y);
-      }
-      pop();
-    }
-    if (this.drawCenter) {
-      redDotAt(center.x, center.y);
-    }
-    pop();
-  } // draw
-
-  // Returns true if the point (x, y) is inside the polygon
-  containsPoint(x, y) {
-    x -= this.pos.x;
-    y -= this.pos.y;
-    let inside = false;
-
-    // Loop through all edges of the polygon
-    for (
-      let i = 0, j = this.points.length - 1;
-      i < this.points.length;
-      j = i++
-    ) {
-      const xi = this.points[i].x;
-      const yi = this.points[i].y;
-      const xj = this.points[j].x;
-      const yj = this.points[j].y;
-
-      // check if point is on a horizontal edge
-      if (
-        yi === y &&
-        yj === y &&
-        x > Math.min(xi, xj) &&
-        x < Math.max(xi, xj)
-      ) {
-        return true;
-      }
-
-      // Check if point is on a vertex
-      if ((xi === x && yi === y) || (xj === x && yj === y)) {
-        return true;
-      }
-
-      // ray casting algorithm
-      if (yi > y !== yj > y) {
-        const intersectX = ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-        if (x < intersectX) {
-          inside = !inside;
+    // Calculate the center point of the polygon
+    getCenter() {
+        let sumX = 0;
+        let sumY = 0;
+        for (const p of this.points) {
+            sumX += p.x;
+            sumY += p.y;
         }
-      }
-    } // for
+        return {
+            x: sumX / this.points.length,
+            y: sumY / this.points.length,
+        };
+    }
 
-    return inside;
-  } // containsPoint
+    // Rotate the polygon around its center by the given angle (in radians)
+    rotate(angleInRadians) {
+        const center = this.getCenter();
+        const cos = Math.cos(angleInRadians);
+        const sin = Math.sin(angleInRadians);
+
+        // Rotate each point around the center
+        for (const point of this.points) {
+            // translate point to origin
+            const dx = point.x - center.x;
+            const dy = point.y - center.y;
+
+            // rotate point
+            point.x = center.x + (dx * cos - dy * sin);
+            point.y = center.y + (dx * sin + dy * cos);
+        }
+        this._angleInDegrees = (this._angleInDegrees + angleInRadians) % 360;
+    }
+
+    rotateDegrees(degrees) {
+        this.rotate(degrees * (Math.PI / 180));
+    }
+
+    set angleInDegrees(d) {
+        this._angleInDegrees = d;
+        // this.rotateDegrees(d);
+    }
+
+    get angleInDegrees() {
+        return this._angleInDegrees;
+    }
+
+    update() {
+        this.pos.x += this.vel.dx;
+        this.pos.y += this.vel.dy;
+
+        // wrap around the screen
+        this.pos.x = wrapCoordinate(this.pos.x, width);
+        this.pos.y = wrapCoordinate(this.pos.y, height);
+
+        // Update the angle by adding the rotation rate
+        if (this.angleRateInDegrees !== 0) {
+            this._angleInDegrees += this.angleRateInDegrees;
+            this.rotateDegrees(this.angleRateInDegrees);
+        }
+    }
+
+    draw() {
+        push();
+        if (this.filled) {
+            fill(255);
+            noStroke();
+        } else {
+            stroke(255);
+            noFill();
+        }
+        translate(this.pos.x, this.pos.y);
+        // rotate(this.angle);
+
+        // draw the polygon
+        beginShape();
+        for (const p of this.points) {
+            vertex(p.x, p.y);
+        }
+        endShape(CLOSE);
+
+        const center = this.getCenter();
+        if (this.showCenterSegments) {
+            push();
+            stroke(255);
+            for (const p of this.points) {
+                line(center.x, center.y, p.x, p.y);
+            }
+            pop();
+        }
+        if (this.showCenter) {
+            redDotAt(center.x, center.y);
+        }
+        pop();
+    } // draw
+
+    // Returns true if the point (x, y) is inside the polygon
+    containsPoint(x, y) {
+        x -= this.pos.x;
+        y -= this.pos.y;
+        let inside = false;
+
+        // Loop through all edges of the polygon
+        for (
+            let i = 0, j = this.points.length - 1;
+            i < this.points.length;
+            j = i++
+        ) {
+            const xi = this.points[i].x;
+            const yi = this.points[i].y;
+            const xj = this.points[j].x;
+            const yj = this.points[j].y;
+
+            // check if point is on a horizontal edge
+            if (
+                yi === y &&
+                yj === y &&
+                x > Math.min(xi, xj) &&
+                x < Math.max(xi, xj)
+            ) {
+                return true;
+            }
+
+            // Check if point is on a vertex
+            if ((xi === x && yi === y) || (xj === x && yj === y)) {
+                return true;
+            }
+
+            // ray casting algorithm
+            if (yi > y !== yj > y) {
+                const intersectX = ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+                if (x < intersectX) {
+                    inside = !inside;
+                }
+            }
+        } // for
+
+        return inside;
+    } // containsPoint
 } // Polygon
 
 //
 // game state
 //
 const state = {
-  playing: "playing",
-  gameOver: "game over",
-  transitioning: "transitioning", // between levels
-  exploding: "exploding", // ship is exploding
-  respawning: "respawning", // in this state waiting for clear space to respawn ship
+    playing: "playing",
+    gameOver: "game over",
+    transitioning: "transitioning", // between levels
+    exploding: "exploding", // ship is exploding
+    respawning: "respawning", // in this state waiting for clear space to respawn ship
 };
 
 let game = {
-  score: 0,
-  level: 1,
-  lives: SHIP.startLives,
-  nextExtraShipScore: SHIP.extraShipScoreIncrement,
-  highScore: 0,
-  status: state.playing,
-  showStatus: false, // for debugging
+    score: 0,
+    level: 1,
+    lives: SHIP.startLives,
+    nextExtraShipScore: SHIP.extraShipScoreIncrement,
+    highScore: 0,
+    status: state.playing,
+    showStatus: false, // for debugging
 };
 
 //
 // the player's ship
 //
 const ship = {
-  x: 200, // position of the ship is (x, y)
-  y: 200,
-  dx: 0, // velocity of the ship is (dx, dy)
-  dy: 0,
-  angle: 0, // angle of the ship in degrees
-  angleRate: 0, // rate of change of the ship angle
-  noseX: 0, // position of the ship's nose (where the bullet comes out)
-  noseY: 0,
-  fillColor: COLOR.bg,
-  outlineColor: COLOR.outline,
-  rotatingLeft: false,
-  rotatingRight: false,
-  accelerating: false,
-  dead: false,
-  showNose: false,
-  showCenter: false,
-  invincible: false,
+    body: new Polygon(structuredClone(SHIP.body)),
+    fillColor: COLOR.bg,
+    outlineColor: COLOR.outline,
+    rotatingLeft: false,
+    rotatingRight: false,
+    accelerating: false,
+    dead: false,
+    showCenter: false,
+    invincible: false,
 }; // ship
 
 //
@@ -362,16 +368,16 @@ const ship = {
 let bullets = [];
 
 function makeBullet(x, y, dx, dy) {
-  const bullet = {
-    x,
-    y,
-    dx,
-    dy, // short-hand for x: x, y: y, dx: dx, dy: dy
-    fillColor: COLOR.bg,
-    outlineColor: COLOR.outline,
-    dead: false,
-  };
-  return bullet;
+    const bullet = {
+        x,
+        y,
+        dx,
+        dy, // short-hand for x: x, y: y, dx: dx, dy: dy
+        fillColor: COLOR.bg,
+        outlineColor: COLOR.outline,
+        dead: false,
+    };
+    return bullet;
 }
 
 //
@@ -381,71 +387,71 @@ let rocks = [];
 
 // Generate n random points for a polygon within a given radius
 function makeRandomPolygonPoints(n, maxRadius) {
-  const points = [];
-  const angleStep = (2 * Math.PI) / n;
+    const points = [];
+    const angleStep = (2 * Math.PI) / n;
 
-  angleMode(RADIANS);
-  for (let i = 0; i < n; i++) {
-    // Generate a random radius between 0.5 and 1 times the max radius. This
-    // creates some irregularity in the shape.
-    const randomRadius = maxRadius * (0.5 + Math.random() * 0.9);
-    const angle = i * angleStep;
+    angleMode(RADIANS);
+    for (let i = 0; i < n; i++) {
+        // Generate a random radius between 0.5 and 1 times the max radius. This
+        // creates some irregularity in the shape.
+        const randomRadius = maxRadius * (0.5 + Math.random() * 0.9);
+        const angle = i * angleStep;
 
-    points.push({
-      x: randomRadius * Math.cos(angle),
-      y: randomRadius * Math.sin(angle),
-    });
-  }
+        points.push({
+            x: randomRadius * Math.cos(angle),
+            y: randomRadius * Math.sin(angle),
+        });
+    }
 
-  return points;
+    return points;
 }
 
 function makeRandomRock(x, y, size, sides) {
-  let shape = new Polygon(makeRandomPolygonPoints(sides, size * 0.5));
-  shape.pos = { x: x, y: y };
-  shape.vel = {
-    dx: random(ROCK.speed.min, ROCK.speed.max) * randSign(),
-    dy: random(ROCK.speed.min, ROCK.speed.max) * randSign(),
-  };
-  shape.angleInDegrees = 0;
-  shape.angleRateInDegrees = randSign() * random(0.3, 1.5);
-  shape.size = size;
-  return shape;
+    let shape = new Polygon(makeRandomPolygonPoints(sides, size * 0.5));
+    shape.pos = { x: x, y: y };
+    shape.vel = {
+        dx: random(ROCK.speed.min, ROCK.speed.max) * randSign(),
+        dy: random(ROCK.speed.min, ROCK.speed.max) * randSign(),
+    };
+    shape.angleInDegrees = 0;
+    shape.angleRateInDegrees = randSign() * random(0.3, 1.5);
+    shape.size = size;
+    return shape;
 }
 
 function makeRandSmallRock(x, y) {
-  return makeRandomRock(x, y, ROCK.small.size, ROCK.small.sides);
+    return makeRandomRock(x, y, ROCK.small.size, ROCK.small.sides);
 }
 
 function makeRandMediumRock(x, y) {
-  return makeRandomRock(x, y, ROCK.medium.size, ROCK.medium.sides);
+    return makeRandomRock(x, y, ROCK.medium.size, ROCK.medium.sides);
 }
 
 function makeRandLargeRock(x, y) {
-  return makeRandomRock(x, y, ROCK.large.size, ROCK.large.sides);
+    return makeRandomRock(x, y, ROCK.large.size, ROCK.large.sides);
 }
 
 function randRockPoint(span) {
-  if (random(0, 1) < 0.5) {
-    return random(0, span * 0.25);
-  } else {
-    return random(span * 0.75, span);
-  }
+    if (random(0, 1) < 0.5) {
+        return random(0, span * 0.25);
+    } else {
+        return random(span * 0.75, span);
+    }
 }
 
 function randRockX() {
-  return randRockPoint(width);
+    return randRockPoint(width);
 }
 
 function randRockY() {
-  return randRockPoint(height);
+    return randRockPoint(height);
 }
 
 function addInitialLargeRocks(numRocks) {
-  rocks = [];
-  for (let i = 0; i < numRocks; i++) {
-    rocks.push(makeRandLargeRock(randRockX(), randRockY()));
-  } // for
+    rocks = [];
+    for (let i = 0; i < numRocks; i++) {
+        rocks.push(makeRandLargeRock(randRockX(), randRockY()));
+    } // for
 }
 
 //
@@ -465,113 +471,117 @@ let rockExplosions = [];
 // and ask it to find a bug (and suggest a fix). In general, it did a great job.
 //
 class RockExplosion {
-  constructor(rock) {
-    this.dead = false;
-    this.segments = [];
-    const n = rock.points.length;
-    const inheritedSpeedScale = 0.5; // adjust how much of the rock's speed to inherit
-    const explosionSpeed = 0.15; // adjust how fast the segments move outwards
+    constructor(rock) {
+        this.dead = false;
+        this.segments = [];
+        const n = rock.points.length;
+        const inheritedSpeedScale = 0.5; // adjust how much of the rock's speed to inherit
+        const explosionSpeed = 0.15; // adjust how fast the segments move outwards
 
-    // Create segments and give each one its own position, velocity and rotation
-    for (let i = 0; i < n; i++) {
-      const start = { ...rock.points[i] }; // clone the points
-      const end = { ...rock.points[(i + 1) % n] };
+        // Create segments and give each one its own position, velocity and rotation
+        for (let i = 0; i < n; i++) {
+            const start = { ...rock.points[i] }; // clone the points
+            const end = { ...rock.points[(i + 1) % n] };
 
-      // calculate the midpoint of the segment (segments rotate around this point)
-      const midpoint = {
-        x: (start.x + end.x) / 2,
-        y: (start.y + end.y) / 2,
-      };
-      const relativeStart = {
-        x: start.x - midpoint.x,
-        y: start.y - midpoint.y,
-      };
-      const relativeEnd = {
-        x: end.x - midpoint.x,
-        y: end.y - midpoint.y,
-      };
+            // calculate the midpoint of the segment (segments rotate around this point)
+            const midpoint = {
+                x: (start.x + end.x) / 2,
+                y: (start.y + end.y) / 2,
+            };
+            const relativeStart = {
+                x: start.x - midpoint.x,
+                y: start.y - midpoint.y,
+            };
+            const relativeEnd = {
+                x: end.x - midpoint.x,
+                y: end.y - midpoint.y,
+            };
 
-      // calculate direction vector from rock center to segment midpoint
-      const dirX = midpoint.x; // since rock points are already relative to center
-      const dirY = midpoint.y;
+            // calculate direction vector from rock center to segment midpoint
+            const dirX = midpoint.x; // since rock points are already relative to center
+            const dirY = midpoint.y;
 
-      // normalize the direction vector and scale it
-      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+            // normalize the direction vector and scale it
+            const length = Math.sqrt(dirX * dirX + dirY * dirY);
 
-      this.segments.push({
-        start: relativeStart,
-        end: relativeEnd,
-        pos: { x: rock.pos.x + midpoint.x, y: rock.pos.y + midpoint.y },
-        vel: {
-          dx:
-            (dirX / length) * explosionSpeed +
-            rock.vel.dx * inheritedSpeedScale,
-          dy:
-            (dirY / length) * explosionSpeed +
-            rock.vel.dy * inheritedSpeedScale,
-        },
-        angle: 0,
-        angleRate: random(40, 75) * randSign(),
-      });
+            // add some randomness to the velocity to make the explosion look
+            // more natural
+            this.segments.push({
+                start: relativeStart,
+                end: relativeEnd,
+                pos: { x: rock.pos.x + midpoint.x, y: rock.pos.y + midpoint.y },
+                vel: {
+                    dx:
+                        random(-0.25, 0.25) +
+                        (dirX / length) * explosionSpeed +
+                        rock.vel.dx * inheritedSpeedScale,
+                    dy:
+                        random(-0.25, 0.25) +
+                        (dirY / length) * explosionSpeed +
+                        rock.vel.dy * inheritedSpeedScale,
+                },
+                angle: 0,
+                angleRate: random(2, 15) * randSign(),
+            });
+        }
+        this.alpha = 200; // for fade out effect
     }
-    this.alpha = 200; // for fade out effect
-  }
 
-  update() {
-    this.alpha -= 2; // fade out
-    for (const seg of this.segments) {
-      // update position
-      seg.pos.x += seg.vel.dx;
-      seg.pos.y += seg.vel.dy;
+    update() {
+        this.alpha -= 2; // fade out
+        for (const seg of this.segments) {
+            // update position
+            seg.pos.x += seg.vel.dx;
+            seg.pos.y += seg.vel.dy;
 
-      // wrap around the screen
-      seg.pos.x = wrapCoordinate(seg.pos.x, width);
-      seg.pos.y = wrapCoordinate(seg.pos.y, height);
+            // wrap around the screen
+            seg.pos.x = wrapCoordinate(seg.pos.x, width);
+            seg.pos.y = wrapCoordinate(seg.pos.y, height);
 
-      // update rotation
-      seg.angle += seg.angleRate;
+            // update rotation
+            seg.angle += seg.angleRate;
+        }
+        if (this.alpha <= 0) {
+            this.dead = true;
+        }
+    } // update
+
+    draw() {
+        push();
+        stroke(255, this.alpha);
+        noFill();
+        for (const s of this.segments) {
+            push();
+            translate(s.pos.x, s.pos.y);
+            rotate(radians(s.angle));
+            line(s.start.x, s.start.y, s.end.x, s.end.y);
+            pop();
+        }
+        pop();
     }
-    if (this.alpha <= 0) {
-      this.dead = true;
-    }
-  } // update
-
-  draw() {
-    push();
-    stroke(255, this.alpha);
-    noFill();
-    for (const s of this.segments) {
-      push();
-      translate(s.pos.x, s.pos.y);
-      rotate(radians(s.angle));
-      line(s.start.x, s.start.y, s.end.x, s.end.y);
-      pop();
-    }
-    pop();
-  }
 } // RockExplosion
 
 function makeParticle(x, y) {
-  return {
-    x,
-    y,
-    dx: random(SHIP.particle.minSpeed, SHIP.particle.maxSpeed) * randSign(),
-    dy: random(SHIP.particle.minSpeed, SHIP.particle.maxSpeed) * randSign(),
-    size: random(SHIP.particle.minSize, SHIP.particle.maxSize),
-  };
+    return {
+        x,
+        y,
+        dx: random(SHIP.particle.minSpeed, SHIP.particle.maxSpeed) * randSign(),
+        dy: random(SHIP.particle.minSpeed, SHIP.particle.maxSpeed) * randSign(),
+        size: random(SHIP.particle.minSize, SHIP.particle.maxSize),
+    };
 }
 
 function drawRockExplosions() {
-  for (const e of rockExplosions) {
-    e.draw();
-  }
+    for (const e of rockExplosions) {
+        e.draw();
+    }
 }
 
 function updateRockExplosions() {
-  for (const e of rockExplosions) {
-    e.update();
-  }
-  rockExplosions = rockExplosions.filter((e) => !e.dead);
+    for (const e of rockExplosions) {
+        e.update();
+    }
+    rockExplosions = rockExplosions.filter((e) => !e.dead);
 }
 
 //
@@ -580,556 +590,570 @@ function updateRockExplosions() {
 let shipExplosion = null;
 
 function makeShipExplosion(ship) {
-  const particles = Array(20)
-    .fill()
-    .map(() => makeParticle(ship.x, ship.y));
-  return particles;
+    const particles = Array(20)
+        .fill()
+        .map(() => makeParticle(ship.body.pos.x, ship.body.pos.y));
+    return particles;
 }
 
 function removeShipExplosionAfterDelay(e) {
-  setTimeout(() => {
-    shipExplosion = null;
-  }, SHIP.explosionDelayMS);
+    setTimeout(() => {
+        shipExplosion = null;
+    }, SHIP.explosionDelayMS);
 }
 
 function drawShipExplosion() {
-  if (shipExplosion === null) return;
-  push();
-  for (const p of shipExplosion) {
-    fill(255, 0, 0);
-    rect(p.x, p.y, p.size, p.size);
-  }
-  pop();
+    if (shipExplosion === null) return;
+    push();
+    noStroke();
+    for (const p of shipExplosion) {
+        fill(255, 0, 0);
+        rect(p.x, p.y, p.size, p.size);
+    }
+    pop();
 }
 
 function updateShipExplosion() {
-  if (shipExplosion === null) return;
-  for (const p of shipExplosion) {
-    p.x += p.dx;
-    p.y += p.dy;
-    // wrap around the screen
-    p.x = wrapCoordinate(p.x, width);
-    p.y = wrapCoordinate(p.y, height);
-  } // for
+    if (shipExplosion === null) return;
+    for (const p of shipExplosion) {
+        p.x += p.dx;
+        p.y += p.dy;
+        // wrap around the screen
+        p.x = wrapCoordinate(p.x, width);
+        p.y = wrapCoordinate(p.y, height);
+    } // for
 } // updateShipExplosion
 
 //
 // score
 //
 const score = {
-  x: 10,
-  y: 20,
-  fontSize: 16,
-  color: 255,
+    x: 10,
+    y: 20,
+    fontSize: 16,
+    color: 255,
 };
 
 //
 // initialize the game
 //
 function initializeGame() {
-  game.status = state.playing;
-  game.score = 0;
-  game.lives = SHIP.startLives;
-  game.level = 1;
-  game.nextExtraShipScore = SHIP.extraShipScoreIncrement;
-  bullets = [];
-  shipExplosion = null;
-  rockExplosions = [];
-  rocks = [];
-  addInitialLargeRocks(3);
-  ship.x = 200;
-  ship.y = 200;
-  ship.dx = 0;
-  ship.dy = 0;
-  ship.angle = 0;
-  ship.angleRate = 0;
-  ship.rotatingLeft = false;
-  ship.rotatingRight = false;
-  ship.accelerating = false;
-  ship.dead = false;
-  ship.invincible = false;
+    game.status = state.playing;
+    game.score = 0;
+    game.lives = SHIP.startLives;
+    game.level = 1;
+    game.nextExtraShipScore = SHIP.extraShipScoreIncrement;
+    bullets = [];
+    shipExplosion = null;
+    rockExplosions = [];
+    rocks = [];
+    addInitialLargeRocks(3);
+    ship.body.points = structuredClone(SHIP.body);
+    ship.body.pos.x = PLAYFIELD.center.x;
+    ship.body.pos.y = PLAYFIELD.center.y;
+    ship.body.vel.dx = 0;
+    ship.body.vel.dy = 0;
+    ship.body.angleInDegrees = 0;
+    ship.body.angleRateInDegrees = 0;
+    ship.rotatingLeft = false;
+    ship.rotatingRight = false;
+    ship.accelerating = false;
+    ship.dead = false;
+    ship.invincible = false;
 }
 
 //
 // main setup and draw functions
 //
 function setup() {
-  createCanvas(PLAYFIELD.width, PLAYFIELD.height);
-  // noCursor(); // turn off the mouse pointer so we can see the ship
+    createCanvas(PLAYFIELD.width, PLAYFIELD.height);
+    // noCursor(); // turn off the mouse pointer so we can see the ship
 
-  initializeGame();
+    initializeGame();
 }
 
 function draw() {
-  background(0);
+    background(0);
 
-  push();
-  // draw respawn circle
-  noFill();
-  // draw lines from screen center to rock centers
-  let rockInRespawnCircle = false;
-  for (const r of rocks) {
-    const center = r.getCenter();
-    const worldX = center.x + r.pos.x;
-    const worldY = center.y + r.pos.y;
-    if (
-      dist(PLAYFIELD.center.x, PLAYFIELD.center.y, worldX, worldY) <
-      SHIP.respawn.radius
-    ) {
-      stroke(255, 0, 0);
-      rockInRespawnCircle = true;
-    } else {
-      stroke(0, 255, 0);
-    }
+    push();
+    // draw respawn circle
+    noFill();
+    // draw lines from screen center to rock centers
+    let rockInRespawnCircle = false;
+    for (const r of rocks) {
+        const center = r.getCenter();
+        const worldX = center.x + r.pos.x;
+        const worldY = center.y + r.pos.y;
+        if (
+            dist(PLAYFIELD.center.x, PLAYFIELD.center.y, worldX, worldY) <
+            SHIP.respawn.radius
+        ) {
+            stroke(255, 0, 0);
+            rockInRespawnCircle = true;
+        } else {
+            stroke(0, 255, 0);
+        }
+        if (SHIP.respawn.show) {
+            line(PLAYFIELD.center.x, PLAYFIELD.center.y, worldX, worldY);
+        }
+    } // for
     if (SHIP.respawn.show) {
-      line(PLAYFIELD.center.x, PLAYFIELD.center.y, worldX, worldY);
+        if (rockInRespawnCircle) {
+            stroke(255, 0, 0);
+        } else {
+            stroke(0, 255, 0);
+        }
+        ellipse(
+            PLAYFIELD.center.x,
+            PLAYFIELD.center.y,
+            SHIP.respawn.radius,
+            SHIP.respawn.radius
+        );
     }
-  } // for
-  if (SHIP.respawn.show) {
-    if (rockInRespawnCircle) {
-      stroke(255, 0, 0);
-    } else {
-      stroke(0, 255, 0);
+    pop();
+
+    if (game.status === state.playing) {
+        updateShip();
+        drawShip();
+
+        updateBullets();
+        drawBullets();
+
+        updateRocks();
+        drawRocks();
+
+        updateRockExplosions();
+        drawRockExplosions();
+
+        updateShipExplosion();
+        drawShipExplosion();
+
+        drawScore();
+    } else if (game.status === state.gameOver) {
+        updateBullets();
+        drawBullets();
+
+        updateRocks();
+        drawRocks();
+
+        updateRockExplosions();
+        drawRockExplosions();
+
+        updateShipExplosion();
+        drawShipExplosion();
+
+        drawScore();
+        drawGameOver();
+    } else if (game.status === state.transitioning) {
+        updateShip();
+        drawShip();
+
+        updateBullets();
+        drawBullets();
+
+        updateRockExplosions();
+        drawRockExplosions();
+
+        updateShipExplosion();
+        drawShipExplosion();
+
+        drawScore();
+    } else if (game.status === state.exploding) {
+        updateBullets();
+        drawBullets();
+
+        updateRocks();
+        drawRocks();
+
+        updateRockExplosions();
+        drawRockExplosions();
+
+        updateShipExplosion();
+        drawShipExplosion();
+
+        drawScore();
+    } else if (game.status === state.respawning) {
+        if (!rockInRespawnCircle) {
+            game.status = state.playing;
+            ship.dead = false;
+            ship.body.pos.x = width / 2;
+            ship.body.pos.y = height / 2;
+            ship.body.vel.dx = 0;
+            ship.body.vel.dy = 0;
+            ship.body.points = structuredClone(SHIP.body);
+            ship.body.angleInDegrees = 0;
+            ship.body.angleRateInDegrees = 0;
+            ship.rotatingLeft = false;
+            ship.rotatingRight = false;
+            ship.accelerating = false;
+        }
+        updateBullets();
+        drawBullets();
+
+        updateRocks();
+        drawRocks();
+
+        updateRockExplosions();
+        drawRockExplosions();
+
+        updateShipExplosion();
+        drawShipExplosion();
+
+        drawScore();
     }
-    ellipse(
-      PLAYFIELD.center.x,
-      PLAYFIELD.center.y,
-      SHIP.respawn.radius,
-      SHIP.respawn.radius
-    );
-  }
-  pop();
-
-  if (game.status === state.playing) {
-    updateShip();
-    drawShip();
-
-    updateBullets();
-    drawBullets();
-
-    updateRocks();
-    drawRocks();
-
-    updateRockExplosions();
-    drawRockExplosions();
-
-    updateShipExplosion();
-    drawShipExplosion();
-
-    drawScore();
-  } else if (game.status === state.gameOver) {
-    updateBullets();
-    drawBullets();
-
-    updateRocks();
-    drawRocks();
-
-    updateRockExplosions();
-    drawRockExplosions();
-
-    updateShipExplosion();
-    drawShipExplosion();
-
-    drawScore();
-    drawGameOver();
-  } else if (game.status === state.transitioning) {
-    updateShip();
-    drawShip();
-
-    updateBullets();
-    drawBullets();
-
-    updateRockExplosions();
-    drawRockExplosions();
-
-    updateShipExplosion();
-    drawShipExplosion();
-
-    drawScore();
-  } else if (game.status === state.exploding) {
-    updateBullets();
-    drawBullets();
-
-    updateRocks();
-    drawRocks();
-
-    updateRockExplosions();
-    drawRockExplosions();
-
-    updateShipExplosion();
-    drawShipExplosion();
-
-    drawScore();
-  } else if (game.status === state.respawning) {
-    if (!rockInRespawnCircle) {
-      console.log("respawning");
-
-      game.status = state.playing;
-      ship.dead = false;
-      ship.x = width / 2;
-      ship.y = height / 2;
-      ship.dx = 0;
-      ship.dy = 0;
-      ship.angle = 0;
-      ship.angleRate = 0;
-    }
-    updateBullets();
-    drawBullets();
-
-    updateRocks();
-    drawRocks();
-
-    updateRockExplosions();
-    drawRockExplosions();
-
-    updateShipExplosion();
-    drawShipExplosion();
-
-    drawScore();
-  }
 } // draw
 
-function drawShipBody() {
-  // draw the ship: triangle(nose, left wing, right wing)
-  triangle(
-    0,
-    -SHIP.height / 2,
-    -SHIP.width / 2,
-    SHIP.height / 2,
-    SHIP.width / 2,
-    SHIP.height / 2
-  );
-}
-
 function drawShip() {
-  push();
+    push();
 
-  stroke(ship.outlineColor);
-  if (ship.invincible) {
-    stroke(255, 255, 0);
-  }
-  fill(ship.fillColor);
+    stroke(ship.outlineColor);
+    if (ship.invincible) {
+        stroke(255, 255, 0);
+    }
+    fill(ship.fillColor);
 
-  // move origin
-  translate(ship.x, ship.y);
+    // move origin
+    // translate(ship.body.pos.x, ship.body.pos.y);
 
-  // rotate entire screen around the origin
-  angleMode(DEGREES); // rotate using degrees
-  rotate(ship.angle);
+    // rotate entire screen around the origin
+    // angleMode(DEGREES); // rotate using degrees
+    // rotate(ship.body.angle);
 
-  drawShipBody();
+    ship.body.draw();
+    pop();
 
-  pop();
-
-  if (ship.showNose) {
-    redDotAt(ship.noseX, ship.noseY);
-  }
-  if (ship.showCenter) {
-    greenDotAt(ship.x, ship.y);
-  }
+    if (ship.showCenter) {
+        greenDotAt(ship.body.pos.x, ship.body.pos.y);
+    }
 } // drawShip
 
 function updateShip() {
-  if (ship.dead) return;
-  if (ship.accelerating) {
-    const angle = ship.angle * (Math.PI / 180);
-    ship.dx += SHIP.accel * Math.sin(angle);
-    ship.dy += -SHIP.accel * Math.cos(angle);
-  }
+    if (ship.dead) return;
 
-  // Apply max speed constraint after acceleration
-  const currentSpeed = sqrt(ship.dx * ship.dx + ship.dy * ship.dy);
-  if (currentSpeed > SHIP.maxSpeed) {
-    const scale = SHIP.maxSpeed / currentSpeed;
-    ship.dx *= scale;
-    ship.dy *= scale;
-  }
+    if (ship.accelerating) {
+        const angleRadians = ship.body.angleInDegrees * (Math.PI / 180);
+        ship.body.vel.dx += SHIP.accel * Math.sin(angleRadians);
+        ship.body.vel.dy += -SHIP.accel * Math.cos(angleRadians);
+    }
 
-  // update ship position based on velocity
-  ship.x += ship.dx;
-  ship.y += ship.dy;
+    // Apply max speed constraint after acceleration
+    const currentSpeed = sqrt(
+        ship.body.vel.dx * ship.body.vel.dx +
+            ship.body.vel.dy * ship.body.vel.dy
+    );
+    if (currentSpeed > SHIP.maxSpeed) {
+        const scale = SHIP.maxSpeed / currentSpeed;
+        ship.body.vel.dx *= scale;
+        ship.body.vel.dy *= scale;
+    }
 
-  // make wrap-around screen if it goes off edge
-  ship.x = wrapCoordinate(ship.x, width);
-  ship.y = wrapCoordinate(ship.y, height);
+    // decrease velocity ship
+    if (ship.body.vel.dx > 0) {
+        ship.body.vel.dx = constrain(
+            ship.body.vel.dx - SHIP.decel,
+            0,
+            ship.body.vel.dx
+        );
+    } else if (ship.body.vel.dx < 0) {
+        ship.body.vel.dx = constrain(
+            ship.body.vel.dx + SHIP.decel,
+            ship.body.vel.dx,
+            0
+        );
+    }
 
-  // decrease velocity ship
-  if (ship.dx > 0) {
-    ship.dx = constrain(ship.dx - SHIP.decel, 0, ship.dx);
-  } else if (ship.dx < 0) {
-    ship.dx = constrain(ship.dx + SHIP.decel, ship.dx, 0);
-  }
+    if (ship.body.vel.dy > 0) {
+        ship.body.vel.dy = constrain(
+            ship.body.vel.dy - SHIP.decel,
+            0,
+            ship.body.vel.dy
+        );
+    } else if (ship.body.vel.dy < 0) {
+        ship.body.vel.dy = constrain(
+            ship.body.vel.dy + SHIP.decel,
+            ship.body.vel.dy,
+            0
+        );
+    }
 
-  if (ship.dy > 0) {
-    ship.dy = constrain(ship.dy - SHIP.decel, 0, ship.dy);
-  } else if (ship.dy < 0) {
-    ship.dy = constrain(ship.dy + SHIP.decel, ship.dy, 0);
-  }
+    // update angle of ship
+    if (ship.rotatingLeft) {
+        ship.body.angleRateInDegrees = -SHIP.angleRate;
+    } else if (ship.rotatingRight) {
+        ship.body.angleRateInDegrees = SHIP.angleRate;
+    } else {
+        ship.body.angleRateInDegrees = 0;
+    }
 
-  // update angle of ship
-  if (ship.rotatingLeft) {
-    ship.angleRate = -SHIP.angleRate;
-  } else if (ship.rotatingRight) {
-    ship.angleRate = SHIP.angleRate;
-  } else {
-    ship.angleRate = 0;
-  }
-  ship.angle += ship.angleRate;
-
-  //
-  // At this point x, y, dx, dy, and dy are updated. Now update the position of
-  // the nose.
-  //
-  const angle = (ship.angle - 90) * (Math.PI / 180);
-  ship.noseX = ship.x + (SHIP.height / 2) * Math.cos(angle);
-  ship.noseY = ship.y + (SHIP.height / 2) * Math.sin(angle);
+    ship.body.update();
 }
 
 //
 // bullet functions
 //
 function drawBullets() {
-  push();
+    push();
 
-  for (const b of bullets) {
-    fill(b.outlineColor);
-    stroke(b.outlineColor);
-    ellipse(b.x, b.y, BULLET.size, BULLET.size);
-  }
+    for (const b of bullets) {
+        fill(b.outlineColor);
+        stroke(b.outlineColor);
+        ellipse(b.x, b.y, BULLET.size, BULLET.size);
+    }
 
-  pop();
+    pop();
 } // drawBullets
 
 function updateBullets() {
-  for (const bullet of bullets) {
-    bullet.x += bullet.dx;
-    bullet.y += bullet.dy;
-    bullet.x = wrapCoordinate(bullet.x, width);
-    bullet.y = wrapCoordinate(bullet.y, height);
-  }
-  // remove dead bullets
-  bullets = bullets.filter((b) => !b.dead);
+    for (const bullet of bullets) {
+        bullet.x += bullet.dx;
+        bullet.y += bullet.dy;
+        bullet.x = wrapCoordinate(bullet.x, width);
+        bullet.y = wrapCoordinate(bullet.y, height);
+    }
+    // remove dead bullets
+    bullets = bullets.filter((b) => !b.dead);
 }
 
 // make the sprite disappear after a delay
 function removeBulletAfterDelay(b, delayMS) {
-  setTimeout(() => {
-    b.dead = true;
-  }, delayMS);
+    setTimeout(() => {
+        b.dead = true;
+    }, delayMS);
 }
 
 function drawRocks() {
-  push();
+    push();
 
-  noFill();
-  for (const r of rocks) {
-    r.draw();
-  }
+    noFill();
+    for (const r of rocks) {
+        r.draw();
+    }
 
-  pop();
+    pop();
 } // drawRocks
 
 function updateRocks() {
-  for (const r of rocks) {
-    // check if the ship hit the rock
-    if (
-      (r.containsPoint(ship.x, ship.y) ||
-        r.containsPoint(ship.noseX, ship.noseY)) &&
-      !ship.invincible &&
-      game.status === state.playing
-    ) {
-      if (game.lives > 1) {
-        game.lives--;
-        game.status = state.exploding;
-        setTimeout(() => {
-          game.status = state.respawning;
-        }, DELAY_TO_RESPAWN);
-      } else {
-        game.status = state.gameOver;
-      }
-      const e = makeShipExplosion(ship);
-      shipExplosion = e;
-      removeShipExplosionAfterDelay(e);
-      ship.dead = true;
+    for (const r of rocks) {
+        // Check if any point of the ship is inside the rock
+        let shipHitRock = false;
+        if (!ship.invincible && game.status === state.playing) {
+            for (const point of ship.body.points) {
+                // Convert ship's local point coordinates to world coordinates
+                const worldX = point.x + ship.body.pos.x;
+                const worldY = point.y + ship.body.pos.y;
+
+                if (r.containsPoint(worldX, worldY)) {
+                    shipHitRock = true;
+                    break;
+                }
+            }
+        }
+
+        if (shipHitRock) {
+            if (game.lives > 1) {
+                game.lives--;
+                game.status = state.exploding;
+                setTimeout(() => {
+                    game.status = state.respawning;
+                }, DELAY_TO_RESPAWN);
+            } else {
+                game.status = state.gameOver;
+            }
+            const e = makeShipExplosion(ship);
+            shipExplosion = e;
+            removeShipExplosionAfterDelay(e);
+            ship.dead = true;
+        }
+
+        // check if a bullet hit the rock
+        let hit = false;
+        for (const b of bullets) {
+            if (r.containsPoint(b.x, b.y)) {
+                hit = true;
+                b.dead = true;
+
+                // add explosion
+                const e = new RockExplosion(r);
+                rockExplosions.push(e);
+
+                // rocks explode into other rocks
+                switch (r.size) {
+                    case ROCK.small.size: // remove small rock
+                        game.score += ROCK.small.score;
+                        game.highScore = Math.max(game.highScore, game.score);
+                        r.dead = true;
+                        break;
+                    case ROCK.medium.size: // split medium rock into two small rocks
+                        game.score += ROCK.medium.score;
+                        game.highScore = Math.max(game.highScore, game.score);
+                        r.dead = true;
+                        rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
+                        rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
+                        break;
+                    case ROCK.large.size: // split large rock into two medium rocks
+                        game.score += ROCK.large.score;
+                        game.highScore = Math.max(game.highScore, game.score);
+                        r.dead = true;
+                        rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
+                        rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
+                        break;
+                } // switch
+            } // if hitRock
+        } // for bullets
+
+        // if rock is hit, skip to next rock without updating it (it's dead)
+        if (hit) continue;
+
+        // move the rock
+        r.update();
+    } // for
+
+    // remove dead rocks
+    rocks = rocks.filter((r) => !r.dead);
+
+    // check if we need to add a new ship
+    if (game.score >= game.nextExtraShipScore) {
+        game.lives++;
+        game.nextExtraShipScore += SHIP.extraShipScoreIncrement;
+    }
+    // allow at most MAX_EXTRA_SHIPS ships
+    if (game.lives > SHIP.maxLives) {
+        game.lives = SHIP.maxLives;
     }
 
-    // check if a bullet hit the rock
-    let hit = false;
-    for (const b of bullets) {
-      if (r.containsPoint(b.x, b.y)) {
-        hit = true;
-        b.dead = true;
-
-        // add explosion
-        const e = new RockExplosion(r);
-        rockExplosions.push(e);
-
-        // rocks explode into other rocks
-        switch (r.size) {
-          case ROCK.small.size: // remove small rock
-            game.score += ROCK.small.score;
-            game.highScore = Math.max(game.highScore, game.score);
-            r.dead = true;
-            break;
-          case ROCK.medium.size: // split medium rock into two small rocks
-            game.score += ROCK.medium.score;
-            game.highScore = Math.max(game.highScore, game.score);
-            r.dead = true;
-            rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
-            rocks.push(makeRandSmallRock(r.pos.x, r.pos.y));
-            break;
-          case ROCK.large.size: // split large rock into two medium rocks
-            game.score += ROCK.large.score;
-            game.highScore = Math.max(game.highScore, game.score);
-            r.dead = true;
-            rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
-            rocks.push(makeRandMediumRock(r.pos.x, r.pos.y));
-            break;
-        } // switch
-      } // if hitRock
-    } // for bullets
-
-    // if rock is hit, skip to next rock without updating it (it's dead)
-    if (hit) continue;
-
-    // move the rock
-    r.update();
-  } // for
-
-  // remove dead rocks
-  rocks = rocks.filter((r) => !r.dead);
-
-  // check if we need to add a new ship
-  if (game.score >= game.nextExtraShipScore) {
-    game.lives++;
-    game.nextExtraShipScore += SHIP.extraShipScoreIncrement;
-  }
-  // allow at most MAX_EXTRA_SHIPS ships
-  if (game.lives > SHIP.maxLives) {
-    game.lives = SHIP.maxLives;
-  }
-
-  // go to the next level if all rocks are dead
-  if (rocks.length === 0 && game.status === state.playing) {
-    game.status = state.transitioning;
-    setTimeout(() => {
-      game.level++;
-      addInitialLargeRocks(Math.min(5, 2 + game.level));
-      game.status = state.playing;
-    }, LEVEL_DELAY_MS);
-  }
+    // go to the next level if all rocks are dead
+    if (rocks.length === 0 && game.status === state.playing) {
+        game.status = state.transitioning;
+        setTimeout(() => {
+            game.level++;
+            addInitialLargeRocks(Math.min(5, 2 + game.level));
+            game.status = state.playing;
+        }, LEVEL_DELAY_MS);
+    }
 } // updateRocks
 
 //
 // score functions
 //
 function drawScore() {
-  push();
-  // current score
-  textSize(score.fontSize);
-  fill("green");
-  text(game.score.toString(), score.x, score.y);
-
-  // show remaining ships (not including the one currently playing/respawning)
-  push();
-  scale(0.75); // make score ships smaller
-  noFill();
-  stroke(255);
-  let x = 90;
-
-  // After a ship explodes, we show one extra ship in reserve so that the player
-  // can see that the ship is respawning.
-  let extra = 0;
-  if (game.status === state.respawning || game.status === state.exploding) {
-    extra = 1;
-  }
-  for (let i = 0; i < game.lives - 1 + extra; i++) {
-    // # of ships in reserve
     push();
-    translate(x, score.y - 6);
-    drawShipBody();
-    x += SHIP.width + 3;
-    pop();
-  }
-  pop();
-
-  // high score
-  textSize(score.fontSize);
-  fill("yellow");
-  text(`High Score: ${game.highScore}`, score.x + 250, score.y);
-  pop();
-
-  // show current game state
-  if (game.showStatus) {
+    // current score
     textSize(score.fontSize);
-    fill("white");
-    text(`Status: ${game.status}`, score.x + 100, score.y);
-  }
+    fill("green");
+    text(game.score.toString(), score.x, score.y);
+
+    // show remaining ships (not including the one currently playing/respawning)
+    push();
+    scale(0.75); // make score ships smaller
+    noFill();
+    stroke(255);
+    let x = 90;
+
+    // After a ship explodes, we show one extra ship in reserve so that the player
+    // can see that the ship is respawning.
+    let extra = 0;
+    if (game.status === state.respawning || game.status === state.exploding) {
+        extra = 1;
+    }
+    for (let i = 0; i < game.lives - 1 + extra; i++) {
+        // # of ships in reserve
+        push();
+        translate(x, score.y - 6);
+        // ship.body.draw();
+        beginShape();
+        for (const p of SHIP.body) {
+            vertex(p.x, p.y);
+        }
+        endShape(CLOSE);
+        x += SHIP.width + 3;
+        pop();
+    }
+    pop();
+
+    // high score
+    textSize(score.fontSize);
+    fill("yellow");
+    text(`High Score: ${game.highScore}`, score.x + 250, score.y);
+    pop();
+
+    // show current game state
+    if (game.showStatus) {
+        textSize(score.fontSize);
+        fill("white");
+        text(`Status: ${game.status}`, score.x + 100, score.y);
+    }
 }
 
 function drawGameOver() {
-  push();
-  textSize(score.fontSize);
-  fill("red");
-  text(`Game Over: ${game.score}`, width / 2 - 75, height / 2);
-  text("Press P to play again", width / 2 - 100, height / 2 + 20);
-  pop();
+    push();
+    textSize(score.fontSize);
+    fill("red");
+    text(`Game Over: ${game.score}`, width / 2 - 75, height / 2);
+    text("Press P to play again", width / 2 - 100, height / 2 + 20);
+    pop();
 }
 
 //
 // keyboard input
 //
 const userActions = {
-  left: ["a", "A"],
-  right: ["d", "D"],
-  accelerate: ["w", "W"],
-  shoot: [" ", " "],
-  invincible: ["i", "I"],
+    left: ["a", "A"],
+    right: ["d", "D"],
+    accelerate: ["w", "W"],
+    shoot: [" ", " "],
+    invincible: ["i", "I"],
 };
 
 function keyPressed() {
-  if (game.status === state.gameOver) {
-    if (key === "p" || key === "P") {
-      initializeGame();
+    if (game.status === state.gameOver) {
+        if (key === "p" || key === "P") {
+            initializeGame();
+        }
     }
-  }
 
-  // only check for user actions if the game is playing or transitioning
-  if (![state.playing, state.transitioning].includes(game.status)) return;
+    // only check for user actions if the game is playing or transitioning
+    if (![state.playing, state.transitioning].includes(game.status)) return;
 
-  if (userActions.left.includes(key)) {
-    ship.rotatingLeft = true;
-    ship.rotatingRight = false;
-  } else if (userActions.right.includes(key)) {
-    ship.rotatingRight = true;
-    ship.rotatingLeft = false;
-  } else if (userActions.accelerate.includes(key)) {
-    ship.accelerating = true;
-  } else if (userActions.shoot.includes(key)) {
-    if (bullets.length < BULLET.max) {
-      const bdx = ship.noseX - ship.x;
-      const bdy = ship.noseY - ship.y;
-      const h = dist(ship.x, ship.y, ship.noseX, ship.noseY);
-      const b = makeBullet(
-        ship.noseX,
-        ship.noseY,
-        ship.dx + (bdx / h) * BULLET.speed,
-        ship.dy + (bdy / h) * BULLET.speed
-      );
-      bullets.push(b);
-      removeBulletAfterDelay(b, BULLET.lifeMS);
+    if (userActions.left.includes(key)) {
+        ship.rotatingLeft = true;
+        ship.rotatingRight = false;
+    } else if (userActions.right.includes(key)) {
+        ship.rotatingRight = true;
+        ship.rotatingLeft = false;
+    } else if (userActions.accelerate.includes(key)) {
+        ship.accelerating = true;
+    } else if (userActions.shoot.includes(key)) {
+        if (bullets.length < BULLET.max) {
+            const angleInRadians = ship.body.angleInDegrees * (Math.PI / 180);
+
+            // Calculate bullet direction based on ship's angle
+            const bulletSpeed = BULLET.speed;
+            const bdx = Math.sin(angleInRadians) * bulletSpeed;
+            const bdy = -Math.cos(angleInRadians) * bulletSpeed;
+
+            // Use the ship's actual rotated nose point
+            const noseX = ship.body.points[0].x + ship.body.pos.x;
+            const noseY = ship.body.points[0].y + ship.body.pos.y;
+            const b = makeBullet(
+                noseX,
+                noseY,
+                ship.body.vel.dx + bdx,
+                ship.body.vel.dy + bdy
+            );
+            bullets.push(b);
+            removeBulletAfterDelay(b, BULLET.lifeMS);
+        }
+    } else if (userActions.invincible.includes(key)) {
+        ship.invincible = !ship.invincible;
     }
-  } else if (userActions.invincible.includes(key)) {
-    ship.invincible = !ship.invincible;
-  }
 } // keyPressed
 
 function keyReleased() {
-  if (userActions.left.includes(key)) {
-    ship.rotatingLeft = false;
-  } else if (userActions.right.includes(key)) {
-    ship.rotatingRight = false;
-  } else if (userActions.accelerate.includes(key)) {
-    ship.accelerating = false;
-  }
+    if (userActions.left.includes(key)) {
+        ship.rotatingLeft = false;
+    } else if (userActions.right.includes(key)) {
+        ship.rotatingRight = false;
+    } else if (userActions.accelerate.includes(key)) {
+        ship.accelerating = false;
+    }
 } // keyReleased

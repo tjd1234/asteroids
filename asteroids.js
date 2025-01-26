@@ -34,11 +34,11 @@
 //
 // To do:
 // - add explosion constants to SHIP
+// - clean up Polygon code class, i.e. ship does not use Polygon draw()
 // - add line and fill color to Polygon (so multi-colored rocks are possible!)
 // - improve explosion animations
 //   - e.g. make segments rotate around a random point on them
 //   - e.g. add particles
-// - add thrusters animation when W pressed
 // - show score numbers when rock is hit
 // - add sounds effects for shooting, explosions, etc.
 // - add jump to hyperspace (random location, random direction)
@@ -106,6 +106,19 @@ const SHIP_BODY = [
     { x: 0, y: -SHIP_HEIGHT / 2 },
     { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
     { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
+];
+
+// the thrust is a small triangle at the back of the ship
+// const SHIP_THRUST = [
+//     SHIP_BODY[1],
+//     SHIP_BODY[2],
+//     { x: 0, y: SHIP_HEIGHT / 2 + 5 },
+// ];
+
+const SHIP_THRUST = [
+    { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },  // left point
+    { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },   // right point
+    { x: 0, y: SHIP_HEIGHT / 2 + 5 },           // bottom point
 ];
 
 const SHIP = {
@@ -180,6 +193,8 @@ class Polygon {
         this._angleInDegrees = 0;
         this.angleRateInDegrees = 0;
         this.size = 0;
+        this.strokeColor = 255;
+        this.fillColor = 0;
         this.filled = false;
         this.showCenter = false;
         this.showCenterSegments = false;
@@ -250,14 +265,13 @@ class Polygon {
     draw() {
         push();
         if (this.filled) {
-            fill(255);
+            fill(this.fillColor);
             noStroke();
         } else {
-            stroke(255);
+            stroke(this.strokeColor);
             noFill();
         }
         translate(this.pos.x, this.pos.y);
-        // rotate(this.angle);
 
         // draw the polygon
         beginShape();
@@ -266,16 +280,17 @@ class Polygon {
         }
         endShape(CLOSE);
 
-        const center = this.getCenter();
         if (this.showCenterSegments) {
+            const center = this.getCenter();
             push();
-            stroke(255);
+            stroke(this.strokeColor);
             for (const p of this.points) {
                 line(center.x, center.y, p.x, p.y);
             }
             pop();
         }
         if (this.showCenter) {
+            const center = this.getCenter();
             redDotAt(center.x, center.y);
         }
         pop();
@@ -352,6 +367,7 @@ let game = {
 //
 const ship = {
     body: new Polygon(structuredClone(SHIP.body)),
+    thrust: new Polygon(structuredClone(SHIP_THRUST)),
     fillColor: COLOR.bg,
     outlineColor: COLOR.outline,
     rotatingLeft: false,
@@ -660,6 +676,9 @@ function initializeGame() {
     ship.accelerating = false;
     ship.dead = false;
     ship.invincible = false;
+    ship.thrust.strokeColor = "#ffa500"; // orange
+    ship.thrust.fillColor = "#ffa500"; // orange
+    ship.thrust.filled = true;
 }
 
 //
@@ -805,21 +824,33 @@ function draw() {
 
 function drawShip() {
     push();
+    translate(ship.body.pos.x, ship.body.pos.y);
+    rotate(radians(ship.body.angleInDegrees));
 
-    stroke(ship.outlineColor);
     if (ship.invincible) {
         stroke(255, 255, 0);
+    } else {
+        stroke(255);
     }
-    fill(ship.fillColor);
+    noFill();
 
-    // move origin
-    // translate(ship.body.pos.x, ship.body.pos.y);
+    beginShape();
+    for (const p of SHIP_BODY) {  // Use original SHIP_BODY points
+        vertex(p.x, p.y);
+    }
+    endShape(CLOSE);
 
-    // rotate entire screen around the origin
-    // angleMode(DEGREES); // rotate using degrees
-    // rotate(ship.body.angle);
-
-    ship.body.draw();
+    // draw thrust
+    if (ship.accelerating) {
+        fill("#ff8c00");  // dark orange
+        noStroke();
+        // Draw thrust triangle directly using the original SHIP_THRUST points
+        beginShape();
+        vertex(-SHIP_WIDTH / 2, SHIP_HEIGHT / 2);     // left base point
+        vertex(SHIP_WIDTH / 2, SHIP_HEIGHT / 2);      // right base point
+        vertex(0, SHIP_HEIGHT / 2 + 8);               // bottom point
+        endShape(CLOSE);
+    }
     pop();
 
     if (ship.showCenter) {
@@ -886,6 +917,16 @@ function updateShip() {
     }
 
     ship.body.update();
+
+    // Update thrust points to match ship's rotation
+    const angleRadians = ship.body.angleInDegrees * (Math.PI / 180);
+    const cos = Math.cos(angleRadians);
+    const sin = Math.sin(angleRadians);
+
+    ship.thrust.points = SHIP_THRUST.map((point) => ({
+        x: point.x * cos - point.y * sin,
+        y: point.x * sin + point.y * cos,
+    }));
 }
 
 //

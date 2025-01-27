@@ -33,9 +33,8 @@
 
 //
 // To do:
+// - add big and small UFOs
 // - add explosion constants to SHIP
-// - clean up Polygon code class, i.e. ship does not use Polygon draw()
-// - add line and fill color to Polygon (so multi-colored rocks are possible!)
 // - improve explosion animations
 //   - e.g. make segments rotate around a random point on them
 //   - e.g. add particles
@@ -102,24 +101,14 @@ const COLOR = {
 
 const SHIP_WIDTH = 14;
 const SHIP_HEIGHT = 20;
-const SHIP_BODY = [
-    { x: 0, y: -SHIP_HEIGHT / 2 },
-    { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
-    { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },
-];
+
+const SHIP_NOSE = { x: 0, y: -SHIP_HEIGHT / 2 };
+const SHIP_LEFT = { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 };
+const SHIP_RIGHT = { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 };
+const SHIP_BODY = [SHIP_NOSE, SHIP_LEFT, SHIP_RIGHT];
 
 // the thrust is a small triangle at the back of the ship
-// const SHIP_THRUST = [
-//     SHIP_BODY[1],
-//     SHIP_BODY[2],
-//     { x: 0, y: SHIP_HEIGHT / 2 + 5 },
-// ];
-
-const SHIP_THRUST = [
-    { x: -SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },  // left point
-    { x: SHIP_WIDTH / 2, y: SHIP_HEIGHT / 2 },   // right point
-    { x: 0, y: SHIP_HEIGHT / 2 + 5 },           // bottom point
-];
+const SHIP_THRUST = [SHIP_LEFT, SHIP_RIGHT, { x: 0, y: SHIP_HEIGHT / 2 + 5 }];
 
 const SHIP = {
     width: SHIP_WIDTH,
@@ -240,61 +229,11 @@ class Polygon {
 
     set angleInDegrees(d) {
         this._angleInDegrees = d;
-        // this.rotateDegrees(d);
     }
 
     get angleInDegrees() {
         return this._angleInDegrees;
     }
-
-    update() {
-        this.pos.x += this.vel.dx;
-        this.pos.y += this.vel.dy;
-
-        // wrap around the screen
-        this.pos.x = wrapCoordinate(this.pos.x, width);
-        this.pos.y = wrapCoordinate(this.pos.y, height);
-
-        // Update the angle by adding the rotation rate
-        if (this.angleRateInDegrees !== 0) {
-            this._angleInDegrees += this.angleRateInDegrees;
-            this.rotateDegrees(this.angleRateInDegrees);
-        }
-    }
-
-    draw() {
-        push();
-        if (this.filled) {
-            fill(this.fillColor);
-            noStroke();
-        } else {
-            stroke(this.strokeColor);
-            noFill();
-        }
-        translate(this.pos.x, this.pos.y);
-
-        // draw the polygon
-        beginShape();
-        for (const p of this.points) {
-            vertex(p.x, p.y);
-        }
-        endShape(CLOSE);
-
-        if (this.showCenterSegments) {
-            const center = this.getCenter();
-            push();
-            stroke(this.strokeColor);
-            for (const p of this.points) {
-                line(center.x, center.y, p.x, p.y);
-            }
-            pop();
-        }
-        if (this.showCenter) {
-            const center = this.getCenter();
-            redDotAt(center.x, center.y);
-        }
-        pop();
-    } // draw
 
     // Returns true if the point (x, y) is inside the polygon
     containsPoint(x, y) {
@@ -358,6 +297,8 @@ let game = {
     lives: SHIP.startLives,
     nextExtraShipScore: SHIP.extraShipScoreIncrement,
     highScore: 0,
+    shotsFired: 0,
+    rocksHit: 0,
     status: state.playing,
     showStatus: false, // for debugging
 };
@@ -373,6 +314,7 @@ const ship = {
     rotatingLeft: false,
     rotatingRight: false,
     accelerating: false,
+    flashing: false, // flashes for a few seconds after respawning
     dead: false,
     showCenter: false,
     invincible: false,
@@ -385,10 +327,10 @@ let bullets = [];
 
 function makeBullet(x, y, dx, dy) {
     const bullet = {
-        x,
+        x, // short-hand for x: x, y: y, dx: dx, dy: dy
         y,
         dx,
-        dy, // short-hand for x: x, y: y, dx: dx, dy: dy
+        dy,
         fillColor: COLOR.bg,
         outlineColor: COLOR.outline,
         dead: false,
@@ -491,10 +433,10 @@ class RockExplosion {
         this.dead = false;
         this.segments = [];
         const n = rock.points.length;
-        const inheritedSpeedScale = 0.5; // adjust how much of the rock's speed to inherit
-        const explosionSpeed = 0.15; // adjust how fast the segments move outwards
+        const inheritedSpeedScale = 0.5; // how much of the rock's speed to inherit
+        const explosionSpeed = 0.15; // how fast the segments move outwards
 
-        // Create segments and give each one its own position, velocity and rotation
+        // create segments and give each one its own position, velocity and rotation
         for (let i = 0; i < n; i++) {
             const start = { ...rock.points[i] }; // clone the points
             const end = { ...rock.points[(i + 1) % n] };
@@ -659,11 +601,17 @@ function initializeGame() {
     game.lives = SHIP.startLives;
     game.level = 1;
     game.nextExtraShipScore = SHIP.extraShipScoreIncrement;
+    game.shotsFired = 0;
+    game.rocksHit = 0;
+
     bullets = [];
+
     shipExplosion = null;
+
     rockExplosions = [];
     rocks = [];
     addInitialLargeRocks(3);
+
     ship.body.points = structuredClone(SHIP.body);
     ship.body.pos.x = PLAYFIELD.center.x;
     ship.body.pos.y = PLAYFIELD.center.y;
@@ -679,7 +627,7 @@ function initializeGame() {
     ship.thrust.strokeColor = "#ffa500"; // orange
     ship.thrust.fillColor = "#ffa500"; // orange
     ship.thrust.filled = true;
-}
+} // initializeGame
 
 //
 // main setup and draw functions
@@ -695,7 +643,9 @@ function draw() {
     background(0);
 
     push();
-    // draw respawn circle
+
+    // debug code for respawn circle
+
     noFill();
     // draw lines from screen center to rock centers
     let rockInRespawnCircle = false;
@@ -795,6 +745,10 @@ function draw() {
         if (!rockInRespawnCircle) {
             game.status = state.playing;
             ship.dead = false;
+            ship.flashing = true;
+            setTimeout(() => {
+                ship.flashing = false;
+            }, 1000);
             ship.body.pos.x = width / 2;
             ship.body.pos.y = height / 2;
             ship.body.vel.dx = 0;
@@ -823,6 +777,9 @@ function draw() {
 } // draw
 
 function drawShip() {
+    // Don't draw the ship every other frame when flashing
+    if (ship.flashing && frameCount % 15 < 5) return;
+
     push();
     translate(ship.body.pos.x, ship.body.pos.y);
     rotate(radians(ship.body.angleInDegrees));
@@ -835,20 +792,21 @@ function drawShip() {
     noFill();
 
     beginShape();
-    for (const p of SHIP_BODY) {  // Use original SHIP_BODY points
+    for (const p of SHIP_BODY) {
+        // use original SHIP_BODY points
         vertex(p.x, p.y);
     }
     endShape(CLOSE);
 
     // draw thrust
     if (ship.accelerating) {
-        fill("#ff8c00");  // dark orange
+        fill("#ff8c00"); // dark orange
         noStroke();
         // Draw thrust triangle directly using the original SHIP_THRUST points
         beginShape();
-        vertex(-SHIP_WIDTH / 2, SHIP_HEIGHT / 2);     // left base point
-        vertex(SHIP_WIDTH / 2, SHIP_HEIGHT / 2);      // right base point
-        vertex(0, SHIP_HEIGHT / 2 + 8);               // bottom point
+        vertex(-SHIP_WIDTH / 2, SHIP_HEIGHT / 2); // left base point
+        vertex(SHIP_WIDTH / 2, SHIP_HEIGHT / 2); // right base point
+        vertex(0, SHIP_HEIGHT / 2 + 8); // bottom point
         endShape(CLOSE);
     }
     pop();
@@ -878,34 +836,16 @@ function updateShip() {
         ship.body.vel.dy *= scale;
     }
 
-    // decrease velocity ship
-    if (ship.body.vel.dx > 0) {
-        ship.body.vel.dx = constrain(
-            ship.body.vel.dx - SHIP.decel,
-            0,
-            ship.body.vel.dx
-        );
-    } else if (ship.body.vel.dx < 0) {
-        ship.body.vel.dx = constrain(
-            ship.body.vel.dx + SHIP.decel,
-            ship.body.vel.dx,
-            0
-        );
-    }
+    // decrease velocity of ship
+    ship.body.vel.dx =
+        ship.body.vel.dx > 0
+            ? Math.max(0, ship.body.vel.dx - SHIP.decel)
+            : Math.min(0, ship.body.vel.dx + SHIP.decel);
 
-    if (ship.body.vel.dy > 0) {
-        ship.body.vel.dy = constrain(
-            ship.body.vel.dy - SHIP.decel,
-            0,
-            ship.body.vel.dy
-        );
-    } else if (ship.body.vel.dy < 0) {
-        ship.body.vel.dy = constrain(
-            ship.body.vel.dy + SHIP.decel,
-            ship.body.vel.dy,
-            0
-        );
-    }
+    ship.body.vel.dy =
+        ship.body.vel.dy > 0
+            ? Math.max(0, ship.body.vel.dy - SHIP.decel)
+            : Math.min(0, ship.body.vel.dy + SHIP.decel);
 
     // update angle of ship
     if (ship.rotatingLeft) {
@@ -916,9 +856,21 @@ function updateShip() {
         ship.body.angleRateInDegrees = 0;
     }
 
-    ship.body.update();
+    // update ship body
+    ship.body.pos.x += ship.body.vel.dx;
+    ship.body.pos.y += ship.body.vel.dy;
 
-    // Update thrust points to match ship's rotation
+    // wrap around the screen
+    ship.body.pos.x = wrapCoordinate(ship.body.pos.x, width);
+    ship.body.pos.y = wrapCoordinate(ship.body.pos.y, height);
+
+    // update the angle by adding the rotation rate
+    if (ship.body.angleRateInDegrees !== 0) {
+        ship.body.angleInDegrees += ship.body.angleRateInDegrees;
+        ship.body.rotateDegrees(ship.body.angleRateInDegrees);
+    }
+
+    // update thrust points to match ship's rotation
     const angleRadians = ship.body.angleInDegrees * (Math.PI / 180);
     const cos = Math.cos(angleRadians);
     const sin = Math.sin(angleRadians);
@@ -927,7 +879,7 @@ function updateShip() {
         x: point.x * cos - point.y * sin,
         y: point.x * sin + point.y * cos,
     }));
-}
+} // updateShip
 
 //
 // bullet functions
@@ -945,11 +897,11 @@ function drawBullets() {
 } // drawBullets
 
 function updateBullets() {
-    for (const bullet of bullets) {
-        bullet.x += bullet.dx;
-        bullet.y += bullet.dy;
-        bullet.x = wrapCoordinate(bullet.x, width);
-        bullet.y = wrapCoordinate(bullet.y, height);
+    for (const b of bullets) {
+        b.x += b.dx;
+        b.y += b.dy;
+        b.x = wrapCoordinate(b.x, width);
+        b.y = wrapCoordinate(b.y, height);
     }
     // remove dead bullets
     bullets = bullets.filter((b) => !b.dead);
@@ -962,12 +914,46 @@ function removeBulletAfterDelay(b, delayMS) {
     }, delayMS);
 }
 
+function drawRock(rock) {
+    push();
+    if (rock.filled) {
+        fill(rock.fillColor);
+        noStroke();
+    } else {
+        stroke(rock.strokeColor);
+        noFill();
+    }
+    translate(rock.pos.x, rock.pos.y);
+
+    // draw the polygon
+    beginShape();
+    for (const p of rock.points) {
+        vertex(p.x, p.y);
+    }
+    endShape(CLOSE);
+
+    if (rock.showCenterSegments) {
+        const center = rock.getCenter();
+        push();
+        stroke(rock.strokeColor);
+        for (const p of rock.points) {
+            line(center.x, center.y, p.x, p.y);
+        }
+        pop();
+    }
+    if (rock.showCenter) {
+        const center = rock.getCenter();
+        redDotAt(center.x, center.y);
+    }
+    pop();
+} // draw
+
 function drawRocks() {
     push();
 
     noFill();
     for (const r of rocks) {
-        r.draw();
+        drawRock(r);
     }
 
     pop();
@@ -975,11 +961,10 @@ function drawRocks() {
 
 function updateRocks() {
     for (const r of rocks) {
-        // Check if any point of the ship is inside the rock
+        // check if any point of the ship is inside the rock
         let shipHitRock = false;
         if (!ship.invincible && game.status === state.playing) {
             for (const point of ship.body.points) {
-                // Convert ship's local point coordinates to world coordinates
                 const worldX = point.x + ship.body.pos.x;
                 const worldY = point.y + ship.body.pos.y;
 
@@ -1010,6 +995,7 @@ function updateRocks() {
         let hit = false;
         for (const b of bullets) {
             if (r.containsPoint(b.x, b.y)) {
+                game.rocksHit++;
                 hit = true;
                 b.dead = true;
 
@@ -1046,7 +1032,18 @@ function updateRocks() {
         if (hit) continue;
 
         // move the rock
-        r.update();
+        r.pos.x += r.vel.dx;
+        r.pos.y += r.vel.dy;
+
+        // wrap around the screen
+        r.pos.x = wrapCoordinate(r.pos.x, width);
+        r.pos.y = wrapCoordinate(r.pos.y, height);
+
+        // Update the angle by adding the rotation rate
+        if (r.angleRateInDegrees !== 0) {
+            r._angleInDegrees += r.angleRateInDegrees;
+            r.rotateDegrees(r.angleRateInDegrees);
+        }
     } // for
 
     // remove dead rocks
@@ -1097,10 +1094,8 @@ function drawScore() {
         extra = 1;
     }
     for (let i = 0; i < game.lives - 1 + extra; i++) {
-        // # of ships in reserve
         push();
         translate(x, score.y - 6);
-        // ship.body.draw();
         beginShape();
         for (const p of SHIP.body) {
             vertex(p.x, p.y);
@@ -1123,7 +1118,14 @@ function drawScore() {
         fill("white");
         text(`Status: ${game.status}`, score.x + 100, score.y);
     }
-}
+
+    // show shooting accuracy, i.e. shots fired / rocks hit
+    if (game.shotsFired > 0) {
+        fill("white");
+        const accuracy = (100 * game.rocksHit) / game.shotsFired;
+        text(`${accuracy.toFixed(1)}%`, score.x + 100, score.y);
+    }
+} // drawScore
 
 function drawGameOver() {
     push();
@@ -1165,14 +1167,15 @@ function keyPressed() {
         ship.accelerating = true;
     } else if (userActions.shoot.includes(key)) {
         if (bullets.length < BULLET.max) {
+            game.shotsFired++;
             const angleInRadians = ship.body.angleInDegrees * (Math.PI / 180);
 
-            // Calculate bullet direction based on ship's angle
+            // calculate bullet direction based on ship's angle
             const bulletSpeed = BULLET.speed;
             const bdx = Math.sin(angleInRadians) * bulletSpeed;
             const bdy = -Math.cos(angleInRadians) * bulletSpeed;
 
-            // Use the ship's actual rotated nose point
+            // use the ship's actual rotated nose point
             const noseX = ship.body.points[0].x + ship.body.pos.x;
             const noseY = ship.body.points[0].y + ship.body.pos.y;
             const b = makeBullet(
